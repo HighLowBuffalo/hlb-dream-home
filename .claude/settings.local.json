@@ -4,7 +4,9 @@
       "Bash(npx create-next-app@latest . --typescript --tailwind --eslint --app --src=no --import-alias \"@/*\" --use-npm)",
       "Skill(browse)",
       "Skill(browse:*)",
-      "Bash(npm run:*)"
+      "Bash(npm run:*)",
+      "Bash(npx supabase:*)",
+      "Bash(curl -s https://pzzpsfvobgqlyladwrfo.supabase.co/rest/v1/ -H 'apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB6enBzZnZvYmdxbHlsYWR3cmZvIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NjEyMTQwNiwiZXhwIjoyMDkxNjk3NDA2fQ.AMuBiMcO0SKAxqUchruAiOvwqBfwA16do_dBViIxe3Y' -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB6enBzZnZvYmdxbHlsYWR3cmZvIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NjEyMTQwNiwiZXhwIjoyMDkxNjk3NDA2fQ.AMuBiMcO0SKAxqUchruAiOvwqBfwA16do_dBViIxe3Y')"
     ]
   }
 }

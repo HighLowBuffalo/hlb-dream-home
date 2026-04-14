@@ -3,20 +3,35 @@
 import { useState } from "react";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
+import { createClient } from "@/lib/supabase/client";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!email.trim()) return;
 
     setLoading(true);
-    // TODO: Wire up Supabase magic link
-    // await supabase.auth.signInWithOtp({ email })
-    await new Promise((r) => setTimeout(r, 1000));
+    setError("");
+
+    const supabase = createClient();
+    const { error: authError } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        emailRedirectTo: `${window.location.origin}/verify`,
+      },
+    });
+
+    if (authError) {
+      setError("Something went wrong sending the link. Please try again.");
+      setLoading(false);
+      return;
+    }
+
     setSubmitted(true);
     setLoading(false);
   }
@@ -44,8 +59,9 @@ export default function LoginPage() {
               Check your email
             </p>
             <p className="text-sm font-light text-gray-600 leading-relaxed">
-              We sent a sign-in link to <span className="text-black">{email}</span>.
-              Click the link in the email to continue.
+              We sent a sign-in link to{" "}
+              <span className="text-black">{email}</span>. Click the link in
+              the email to continue.
             </p>
           </div>
         ) : (
@@ -61,6 +77,9 @@ export default function LoginPage() {
               required
               autoFocus
             />
+            {error && (
+              <p className="text-sm font-light text-red-600 mt-2">{error}</p>
+            )}
             <div className="mt-8">
               <Button type="submit" disabled={loading} className="w-full">
                 {loading ? "Sending..." : "Send sign-in link"}

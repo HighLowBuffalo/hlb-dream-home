@@ -1,13 +1,33 @@
 "use client";
 
-import Button from "@/components/ui/Button";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Button from "@/components/ui/Button";
 
 export default function WelcomePage() {
   const router = useRouter();
+  const [hasExisting, setHasExisting] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  // TODO: Check for existing in-progress submission
-  const hasExistingSubmission = false;
+  useEffect(() => {
+    async function checkExisting() {
+      try {
+        const res = await fetch("/api/submissions");
+        if (res.ok) {
+          const submissions = await res.json();
+          const inProgress = submissions.find(
+            (s: { status: string }) => s.status === "in_progress"
+          );
+          setHasExisting(!!inProgress);
+        }
+      } catch {
+        // ignore
+      } finally {
+        setLoading(false);
+      }
+    }
+    checkExisting();
+  }, []);
 
   return (
     <div className="flex flex-1 items-center justify-center px-6">
@@ -27,24 +47,26 @@ export default function WelcomePage() {
           about 30 minutes. You can save your progress and come back anytime.
         </p>
 
-        <div className="flex flex-col gap-3 items-center">
-          <Button onClick={() => router.push("/survey")} className="w-64">
-            {hasExistingSubmission ? "Continue where you left off" : "Get started"} &rarr;
-          </Button>
-
-          {hasExistingSubmission && (
-            <Button
-              variant="outline"
-              onClick={() => {
-                // TODO: create new submission
-                router.push("/survey");
-              }}
-              className="w-64"
-            >
-              Start fresh
+        {loading ? (
+          <p className="text-sm font-light text-gray-400">Loading...</p>
+        ) : (
+          <div className="flex flex-col gap-3 items-center">
+            <Button onClick={() => router.push("/survey")} className="w-64">
+              {hasExisting ? "Continue where you left off" : "Get started"}{" "}
+              &rarr;
             </Button>
-          )}
-        </div>
+
+            {hasExisting && (
+              <Button
+                variant="outline"
+                onClick={() => router.push("/survey?new=true")}
+                className="w-64"
+              >
+                Start fresh
+              </Button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
