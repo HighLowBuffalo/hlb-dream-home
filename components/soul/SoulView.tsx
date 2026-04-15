@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { SOUL_QUESTIONS } from "@/lib/data/soulQuestions";
 import SoulQuestion from "./SoulQuestion";
 import Button from "@/components/ui/Button";
@@ -20,6 +21,7 @@ export default function SoulView({
   onSave,
   onComplete,
 }: SoulViewProps) {
+  const [completing, setCompleting] = useState(false);
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
@@ -54,8 +56,20 @@ export default function SoulView({
         ))}
 
         <div className="py-8 border-t border-gray-200">
-          <Button onClick={onComplete} className="w-full">
-            Complete your vision &rarr;
+          <Button
+            onClick={async () => {
+              setCompleting(true);
+              try {
+                await onComplete?.();
+              } catch (err) {
+                console.error("Complete failed:", err);
+                setCompleting(false);
+              }
+            }}
+            disabled={completing}
+            className="w-full"
+          >
+            {completing ? "Completing..." : "Complete your vision \u2192"}
           </Button>
         </div>
       </div>

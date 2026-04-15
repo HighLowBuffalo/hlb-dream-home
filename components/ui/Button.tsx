@@ -23,6 +23,7 @@ export default function Button({
 }: ButtonProps) {
   return (
     <button
+      type="button"
       className={`px-8 py-3 text-xs font-medium tracking-widest uppercase transition-all ${variants[variant]} ${className}`}
       {...props}
     >
