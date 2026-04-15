@@ -149,27 +149,18 @@ export default function SurveyPage() {
     setPhase("soul");
   }, []);
 
-  const handleSoulComplete = useCallback(async () => {
+  const handleSoulComplete = useCallback(() => {
     if (!submissionId) return;
 
-    try {
-      const res = await fetch(`/api/submissions/${submissionId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "completed" }),
-      });
+    // Fire the status update without awaiting — don't block navigation
+    fetch(`/api/submissions/${submissionId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "completed" }),
+    }).catch(() => {});
 
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        console.error("Failed to complete submission:", err);
-      }
-
-      router.push(`/report/${submissionId}`);
-    } catch (err) {
-      console.error("Error completing submission:", err);
-      // Still navigate — the answers are saved, report can display them
-      router.push(`/report/${submissionId}`);
-    }
+    // Navigate immediately
+    router.push(`/report/${submissionId}`);
   }, [submissionId, router]);
 
   if (loading) {

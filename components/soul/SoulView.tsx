@@ -57,14 +57,9 @@ export default function SoulView({
 
         <div className="py-8 border-t border-gray-200">
           <Button
-            onClick={async () => {
+            onClick={() => {
               setCompleting(true);
-              try {
-                await onComplete?.();
-              } catch (err) {
-                console.error("Complete failed:", err);
-                setCompleting(false);
-              }
+              onComplete?.();
             }}
             disabled={completing}
             className="w-full"
