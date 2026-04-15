@@ -1,15 +1,23 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
-export default function VerifyPage() {
+function VerifyContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [error, setError] = useState("");
 
   useEffect(() => {
     async function handleVerify() {
+      // If there's a ?code= param, redirect to the server-side callback handler
+      const code = searchParams.get("code");
+      if (code) {
+        router.replace(`/auth/callback?code=${code}`);
+        return;
+      }
+
       const supabase = createClient();
 
       // The hash fragment contains the auth tokens from the magic link
@@ -42,7 +50,7 @@ export default function VerifyPage() {
     }
 
     handleVerify();
-  }, [router]);
+  }, [router, searchParams]);
 
   if (error) {
     return (
@@ -64,5 +72,19 @@ export default function VerifyPage() {
     <div className="flex flex-1 items-center justify-center px-6">
       <p className="text-sm font-light text-gray-400">Verifying your link...</p>
     </div>
+  );
+}
+
+export default function VerifyPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex flex-1 items-center justify-center px-6">
+          <p className="text-sm font-light text-gray-400">Verifying your link...</p>
+        </div>
+      }
+    >
+      <VerifyContent />
+    </Suspense>
   );
 }
