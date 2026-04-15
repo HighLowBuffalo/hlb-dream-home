@@ -55,16 +55,19 @@ export async function PUT(
 
   const body = await request.json();
 
+  // Only include fields that were actually sent to avoid wiping existing data
+  const updateData: Record<string, unknown> = {};
+  if (body.projectName !== undefined) updateData.project_name = body.projectName;
+  if (body.clientName !== undefined) updateData.client_name = body.clientName;
+  if (body.address !== undefined) updateData.address = body.address;
+  if (body.projectType !== undefined) updateData.project_type = body.projectType;
+  if (body.status !== undefined) updateData.status = body.status;
+  if (body.status === "completed") updateData.completed_at = new Date().toISOString();
+  updateData.updated_at = new Date().toISOString();
+
   const { data, error } = await supabase
     .from("submissions")
-    .update({
-      project_name: body.projectName,
-      client_name: body.clientName,
-      address: body.address,
-      project_type: body.projectType,
-      status: body.status,
-      completed_at: body.status === "completed" ? new Date().toISOString() : undefined,
-    })
+    .update(updateData)
     .eq("id", id)
     .select()
     .single();

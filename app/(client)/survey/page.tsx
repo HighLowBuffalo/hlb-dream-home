@@ -150,12 +150,24 @@ export default function SurveyPage() {
   }, []);
 
   const handleSoulComplete = useCallback(async () => {
-    if (submissionId) {
-      await fetch(`/api/submissions/${submissionId}`, {
+    if (!submissionId) return;
+
+    try {
+      const res = await fetch(`/api/submissions/${submissionId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: "completed" }),
       });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        console.error("Failed to complete submission:", err);
+      }
+
+      router.push(`/report/${submissionId}`);
+    } catch (err) {
+      console.error("Error completing submission:", err);
+      // Still navigate — the answers are saved, report can display them
       router.push(`/report/${submissionId}`);
     }
   }, [submissionId, router]);
