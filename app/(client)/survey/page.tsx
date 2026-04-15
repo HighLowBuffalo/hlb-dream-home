@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import ChatInterface from "@/components/chat/ChatInterface";
 import SoulView from "@/components/soul/SoulView";
@@ -13,10 +13,16 @@ export default function SurveyPage() {
   const router = useRouter();
   const [phase, setPhase] = useState<Phase>("program");
   const [submissionId, setSubmissionId] = useState<string | null>(null);
+  const submissionIdRef = useRef<string | null>(null);
   const [programAnswers, setProgramAnswers] = useState<Record<string, string>>({});
   const [soulAnswers, setSoulAnswers] = useState<Record<string, string>>({});
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [loading, setLoading] = useState(true);
+
+  // Keep ref in sync so callbacks always have latest value
+  useEffect(() => {
+    submissionIdRef.current = submissionId;
+  }, [submissionId]);
 
   // On mount: find existing in-progress submission or create one
   useEffect(() => {
@@ -24,7 +30,6 @@ export default function SurveyPage() {
       try {
         const res = await fetch("/api/submissions");
         if (!res.ok) {
-          // Not authenticated — redirect to login
           if (res.status === 401) {
             router.push("/login");
             return;
@@ -39,6 +44,7 @@ export default function SurveyPage() {
 
         if (inProgress) {
           setSubmissionId(inProgress.id);
+          submissionIdRef.current = inProgress.id;
           // Load existing answers
           const detailRes = await fetch(`/api/submissions/${inProgress.id}`);
           if (detailRes.ok) {
@@ -70,6 +76,7 @@ export default function SurveyPage() {
           if (createRes.ok) {
             const newSub = await createRes.json();
             setSubmissionId(newSub.id);
+            submissionIdRef.current = newSub.id;
           }
         }
       } catch (err) {
@@ -83,7 +90,8 @@ export default function SurveyPage() {
 
   const saveAnswer = useCallback(
     async (key: string, value: string, table: "program" | "soul" = "program") => {
-      if (!submissionId) return;
+      const sid = submissionIdRef.current;
+      if (!sid) return;
 
       setSaveStatus("saving");
       try {
@@ -91,7 +99,7 @@ export default function SurveyPage() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            submissionId,
+            submissionId: sid,
             questionKey: key,
             answerText: value,
             table,
@@ -112,7 +120,7 @@ export default function SurveyPage() {
           };
           const field = metaMap[key];
           if (field) {
-            await fetch(`/api/submissions/${submissionId}`, {
+            await fetch(`/api/submissions/${sid}`, {
               method: "PUT",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ [field]: value }),
@@ -126,7 +134,7 @@ export default function SurveyPage() {
         setSaveStatus("idle");
       }
     },
-    [submissionId]
+    []
   );
 
   const handleProgramAnswer = useCallback(
@@ -149,20 +157,6 @@ export default function SurveyPage() {
     setPhase("soul");
   }, []);
 
-  const handleSoulComplete = useCallback(() => {
-    if (!submissionId) return;
-
-    // Fire the status update without awaiting — don't block navigation
-    fetch(`/api/submissions/${submissionId}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "completed" }),
-    }).catch(() => {});
-
-    // Hard navigation to avoid client-side router hanging on middleware prefetch
-    window.location.href = `/report/${submissionId}`;
-  }, [submissionId]);
-
   if (loading) {
     return (
       <div className="flex flex-1 items-center justify-center">
@@ -184,7 +178,7 @@ export default function SurveyPage() {
           answers={soulAnswers}
           saveStatus={saveStatus}
           onSave={handleSoulSave}
-          onComplete={handleSoulComplete}
+          submissionId={submissionId}
         />
       )}
     </div>

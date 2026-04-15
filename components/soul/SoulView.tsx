@@ -12,16 +12,38 @@ interface SoulViewProps {
   answers?: Record<string, string>;
   saveStatus?: SaveStatus;
   onSave?: (key: string, value: string) => void;
-  onComplete?: () => void;
+  submissionId?: string | null;
 }
 
 export default function SoulView({
   answers = {},
   saveStatus = "idle",
   onSave,
-  onComplete,
+  submissionId,
 }: SoulViewProps) {
   const [completing, setCompleting] = useState(false);
+
+  function handleComplete() {
+    setCompleting(true);
+
+    // Try to mark as completed, but don't let it block navigation
+    if (submissionId) {
+      fetch(`/api/submissions/${submissionId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "completed" }),
+      }).catch(() => {});
+    }
+
+    // Navigate no matter what — use setTimeout to ensure state update renders first
+    setTimeout(() => {
+      const target = submissionId
+        ? `/report/${submissionId}`
+        : "/welcome";
+      window.location.href = target;
+    }, 100);
+  }
+
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
@@ -39,9 +61,9 @@ export default function SoulView({
             Now for the part that matters most.
           </h2>
           <p className="text-sm font-light text-gray-600 leading-relaxed">
-            These questions aren't about square footage or room counts. They're
+            These questions aren&apos;t about square footage or room counts. They&apos;re
             about how you want to feel in your home. There are no right answers
-            — just honest ones. Answer as many as you'd like, in whatever order
+            — just honest ones. Answer as many as you&apos;d like, in whatever order
             feels right.
           </p>
         </div>
@@ -57,10 +79,7 @@ export default function SoulView({
 
         <div className="py-8 border-t border-gray-200">
           <Button
-            onClick={() => {
-              setCompleting(true);
-              onComplete?.();
-            }}
+            onClick={handleComplete}
             disabled={completing}
             className="w-full"
           >
