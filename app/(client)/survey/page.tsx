@@ -159,9 +159,9 @@ export default function SurveyPage() {
       body: JSON.stringify({ status: "completed" }),
     }).catch(() => {});
 
-    // Navigate immediately
-    router.push(`/report/${submissionId}`);
-  }, [submissionId, router]);
+    // Hard navigation to avoid client-side router hanging on middleware prefetch
+    window.location.href = `/report/${submissionId}`;
+  }, [submissionId]);
 
   if (loading) {
     return (
