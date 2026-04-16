@@ -24,6 +24,7 @@ interface ChatInterfaceProps {
   onAnswer?: (key: string, value: string) => void;
   onComplete?: () => void;
   saveStatus?: SaveStatus;
+  submissionId?: string | null;
 }
 
 export default function ChatInterface({
@@ -31,6 +32,7 @@ export default function ChatInterface({
   onAnswer,
   onComplete,
   saveStatus = "idle",
+  submissionId,
 }: ChatInterfaceProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -336,6 +338,7 @@ export default function ChatInterface({
           <UploadWidget
             contextKey={question.uploadContext}
             contextLabel="reference images"
+            submissionId={submissionId || undefined}
           />
         )}
       </div>

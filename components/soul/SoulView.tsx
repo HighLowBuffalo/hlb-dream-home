@@ -71,6 +71,7 @@ export default function SoulView({
             question={q}
             initialValue={answers[q.key] || ""}
             onSave={onSave}
+            submissionId={submissionId}
           />
         ))}
 

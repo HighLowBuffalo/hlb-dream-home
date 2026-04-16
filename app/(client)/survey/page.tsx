@@ -226,6 +226,7 @@ export default function SurveyPage() {
           onAnswer={handleProgramAnswer}
           onComplete={handleProgramComplete}
           saveStatus={saveStatus}
+          submissionId={submissionId}
         />
       ) : (
         <SoulView

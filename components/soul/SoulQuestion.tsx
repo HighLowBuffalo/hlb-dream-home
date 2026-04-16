@@ -9,12 +9,14 @@ interface SoulQuestionProps {
   question: SoulQuestionType;
   initialValue?: string;
   onSave?: (key: string, value: string) => void;
+  submissionId?: string;
 }
 
 export default function SoulQuestion({
   question,
   initialValue = "",
   onSave,
+  submissionId,
 }: SoulQuestionProps) {
   const [value, setValue] = useState(initialValue);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -46,7 +48,7 @@ export default function SoulQuestion({
         rows={4}
       />
       <div className="mt-2">
-        <SoulUploadBtn contextKey={question.key} />
+        <SoulUploadBtn contextKey={question.key} submissionId={submissionId} />
       </div>
     </div>
   );

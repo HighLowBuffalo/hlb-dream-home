@@ -1,18 +1,56 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useState } from "react";
 
 interface SoulUploadBtnProps {
   contextKey: string;
-  onUpload?: (file: File) => void;
+  submissionId?: string;
 }
 
-export default function SoulUploadBtn({ onUpload }: SoulUploadBtnProps) {
-  const inputRef = useRef<HTMLInputElement>(null);
+interface UploadedFile {
+  name: string;
+  status: "uploading" | "done" | "error";
+}
 
-  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files || []);
-    files.forEach((f) => onUpload?.(f));
+export default function SoulUploadBtn({ contextKey, submissionId }: SoulUploadBtnProps) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [files, setFiles] = useState<UploadedFile[]>([]);
+
+  async function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const selected = Array.from(e.target.files || []);
+    if (!submissionId || selected.length === 0) return;
+
+    for (const file of selected) {
+      setFiles((prev) => [...prev, { name: file.name, status: "uploading" }]);
+
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("submissionId", submissionId);
+      formData.append("contextKey", contextKey);
+
+      try {
+        const res = await fetch("/api/images", {
+          method: "POST",
+          body: formData,
+        });
+
+        setFiles((prev) =>
+          prev.map((f) =>
+            f.name === file.name
+              ? { ...f, status: res.ok ? "done" : "error" }
+              : f
+          )
+        );
+      } catch {
+        setFiles((prev) =>
+          prev.map((f) =>
+            f.name === file.name ? { ...f, status: "error" } : f
+          )
+        );
+      }
+    }
+
+    if (inputRef.current) inputRef.current.value = "";
   }
 
   return (
@@ -46,6 +84,26 @@ export default function SoulUploadBtn({ onUpload }: SoulUploadBtnProps) {
         onChange={handleChange}
         className="hidden"
       />
+      {files.length > 0 && (
+        <div className="flex flex-wrap gap-2 mt-1">
+          {files.map((f, i) => (
+            <span
+              key={i}
+              className={`text-[10px] font-light ${
+                f.status === "error"
+                  ? "text-red-600"
+                  : f.status === "uploading"
+                  ? "text-gray-400"
+                  : "text-gray-600"
+              }`}
+            >
+              {f.name}
+              {f.status === "uploading" && " ..."}
+              {f.status === "error" && " (failed)"}
+            </span>
+          ))}
+        </div>
+      )}
     </>
   );
 }

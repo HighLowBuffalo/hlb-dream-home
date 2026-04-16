@@ -6,20 +6,57 @@ interface UploadWidgetProps {
   contextKey: string;
   contextLabel: string;
   submissionId?: string;
-  onUpload?: (file: File) => void;
+}
+
+interface UploadedFile {
+  name: string;
+  status: "uploading" | "done" | "error";
 }
 
 export default function UploadWidget({
+  contextKey,
   contextLabel,
-  onUpload,
+  submissionId,
 }: UploadWidgetProps) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const [files, setFiles] = useState<File[]>([]);
+  const [files, setFiles] = useState<UploadedFile[]>([]);
 
-  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     const selected = Array.from(e.target.files || []);
-    setFiles((prev) => [...prev, ...selected]);
-    selected.forEach((f) => onUpload?.(f));
+    if (!submissionId || selected.length === 0) return;
+
+    for (const file of selected) {
+      setFiles((prev) => [...prev, { name: file.name, status: "uploading" }]);
+
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("submissionId", submissionId);
+      formData.append("contextKey", contextKey);
+
+      try {
+        const res = await fetch("/api/images", {
+          method: "POST",
+          body: formData,
+        });
+
+        setFiles((prev) =>
+          prev.map((f) =>
+            f.name === file.name
+              ? { ...f, status: res.ok ? "done" : "error" }
+              : f
+          )
+        );
+      } catch {
+        setFiles((prev) =>
+          prev.map((f) =>
+            f.name === file.name ? { ...f, status: "error" } : f
+          )
+        );
+      }
+    }
+
+    // Reset input so same file can be selected again
+    if (inputRef.current) inputRef.current.value = "";
   }
 
   return (
@@ -58,9 +95,17 @@ export default function UploadWidget({
           {files.map((f, i) => (
             <span
               key={i}
-              className="text-[11px] text-gray-400 font-light"
+              className={`text-[11px] font-light ${
+                f.status === "error"
+                  ? "text-red-600"
+                  : f.status === "uploading"
+                  ? "text-gray-400"
+                  : "text-gray-600"
+              }`}
             >
               {f.name}
+              {f.status === "uploading" && " ..."}
+              {f.status === "error" && " (failed)"}
             </span>
           ))}
         </div>
