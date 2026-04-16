@@ -94,7 +94,7 @@ export default function AdminDashboard() {
               {submissions.map((sub) => (
                 <tr
                   key={sub.id}
-                  onClick={() => router.push(`/admin/submission/${sub.id}`)}
+                  onClick={() => router.push(`/submission/${sub.id}`)}
                   className="border-b border-gray-200 cursor-pointer hover:bg-gray-100 transition-colors"
                 >
                   <td className="py-3">{sub.client_name || "Unknown"}</td>
