@@ -33,20 +33,22 @@ export interface SpaceTotals {
 
 /**
  * Return true when the client has indicated a space is detached via either
- * an explicit *Location override or a clear mention in the primary answer.
+ * an explicit *Location override or a clear mention in any of the primary
+ * answer keys (e.g. in-law suite can be described in specialRooms or
+ * specialMore — both should be scanned).
  */
 function isDetachedOverride(
   answers: Record<string, string>,
   locationKey: string,
-  primaryAnswerKey: string
+  primaryAnswerKeys: string[]
 ): boolean {
   const explicit = answers[locationKey]?.toLowerCase();
   if (explicit && explicit.includes("detached")) return true;
 
-  const primary = answers[primaryAnswerKey]?.toLowerCase() || "";
-  // Guard against negation; we only care about the literal word as a descriptor.
-  // Matches "detached building", "detached office", "detached structure", etc.
-  if (/\bdetached\b/.test(primary)) return true;
+  for (const key of primaryAnswerKeys) {
+    const primary = answers[key]?.toLowerCase() || "";
+    if (/\bdetached\b/.test(primary)) return true;
+  }
 
   return false;
 }
@@ -111,7 +113,7 @@ export function buildSpaceTable(
 
   // --- Office (may be detached per client override) ---
   if (answers.office && answers.office.toLowerCase() !== "no") {
-    const detached = isDetachedOverride(answers, "officeLocation", "office");
+    const detached = isDetachedOverride(answers, "officeLocation", ["office"]);
     push("office", "Home Office", detached);
   }
 
@@ -138,15 +140,15 @@ export function buildSpaceTable(
     for (const [keyword, info] of Object.entries(specialMap)) {
       if (selected.includes(keyword) && !added.has(info.key)) {
         added.add(info.key);
-        // In-law suite may be detached per client override.
+        // In-law suite may be detached per client override; scan both
+        // specialRooms (where they picked it) and specialMore (where
+        // they may have elaborated).
         const override =
           info.key === "inLawSuite"
-            ? isDetachedOverride(
-                answers,
-                "inLawSuiteLocation",
-                "specialRooms"
-              ) ||
-              isDetachedOverride(answers, "inLawSuiteLocation", "specialMore")
+            ? isDetachedOverride(answers, "inLawSuiteLocation", [
+                "specialRooms",
+                "specialMore",
+              ])
             : undefined;
         push(info.key, info.label, override);
       }

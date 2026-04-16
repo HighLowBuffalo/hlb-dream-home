@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import ChatInterface from "@/components/chat/ChatInterface";
 import Button from "@/components/ui/Button";
@@ -29,9 +29,13 @@ export default function SurveyPage() {
   const router = useRouter();
   const [submissionId, setSubmissionId] = useState<string | null>(null);
   const submissionIdRef = useRef<string | null>(null);
-  const [answers, setAnswers] = useState<Record<string, string>>({});
   const [programAnswers, setProgramAnswers] = useState<Record<string, string>>({});
   const [soulAnswers, setSoulAnswers] = useState<Record<string, string>>({});
+  // Combined view for code paths that don't care about the table split.
+  const answers = useMemo(
+    () => ({ ...programAnswers, ...soulAnswers }),
+    [programAnswers, soulAnswers]
+  );
   const [flags, setFlags] = useState<FlagsByKey>({});
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [loading, setLoading] = useState(true);
@@ -79,7 +83,6 @@ export default function SurveyPage() {
             }
             setProgramAnswers(pMap);
             setSoulAnswers(sMap);
-            setAnswers({ ...pMap, ...sMap });
 
             const loadedFlags: FlagsByKey = {};
             for (const f of detail.flags || []) {
@@ -143,7 +146,6 @@ export default function SurveyPage() {
       // appear in the catalog. Default those to "program" so they still save.
       const table = q?.table ?? "program";
 
-      setAnswers((prev) => ({ ...prev, [key]: value }));
       if (table === "soul") {
         setSoulAnswers((prev) => ({ ...prev, [key]: value }));
       } else {

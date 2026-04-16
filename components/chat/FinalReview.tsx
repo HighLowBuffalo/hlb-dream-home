@@ -33,11 +33,9 @@ export default function FinalReview({
   onToggleFlag,
 }: FinalReviewProps) {
   const [completing, setCompleting] = useState(false);
-  const [error, setError] = useState("");
 
   async function handleComplete() {
     setCompleting(true);
-    setError("");
     try {
       await fetch(`/api/submissions/${submissionId}`, {
         method: "PUT",
@@ -45,7 +43,7 @@ export default function FinalReview({
         body: JSON.stringify({ status: "completed" }),
       });
     } catch {
-      // Non-blocking: answers are already saved. Report can still render.
+      // Non-blocking: answers are already saved. Report still renders.
     }
     window.location.href = `/report/${submissionId}`;
   }
@@ -67,10 +65,6 @@ export default function FinalReview({
           soulAnswers={soulAnswers}
           onToggleFlag={onToggleFlag}
         />
-
-        {error && (
-          <p className="text-sm font-light text-red-600 mb-4">{error}</p>
-        )}
 
         <Button
           onClick={handleComplete}

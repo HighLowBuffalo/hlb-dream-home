@@ -746,7 +746,14 @@ export const QUESTIONS: Question[] = [
 export const PROGRAM_QUESTIONS: Question[] = QUESTIONS.filter((q) => q.phase === "program");
 export const SOUL_QUESTIONS: Question[] = QUESTIONS.filter((q) => q.phase === "soul");
 
+// Indexed once at module load so getQuestion is O(1). The chat + review
+// pages call this many times per render (per message, per flagged key),
+// and a linear find() on 60 entries made it measurably hot.
+const QUESTION_BY_KEY = new Map<string, Question>(
+  QUESTIONS.map((q) => [q.key, q])
+);
+
 /** Lookup a question by key. Returns undefined if not found (e.g. legacy keys). */
 export function getQuestion(key: string): Question | undefined {
-  return QUESTIONS.find((q) => q.key === key);
+  return QUESTION_BY_KEY.get(key);
 }

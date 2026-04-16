@@ -10,6 +10,7 @@ import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import ProgressBar from "@/components/ui/ProgressBar";
 import SaveIndicator from "@/components/ui/SaveIndicator";
+import { parseLLMResponse } from "@/lib/chat/parseLLMResponse";
 import type { FlagType } from "@/components/ui/QuestionFlags";
 
 type SaveStatus = "idle" | "saving" | "saved" | "error";
@@ -44,46 +45,6 @@ interface ChatInterfaceProps {
 const NON_DEFERRABLE_COUNT = QUESTIONS.filter((q) => !q.deferrable).length;
 const COMPLETION_THRESHOLD = 0.8;
 
-/**
- * Parse LLM tags out of a response:
- *   <current_question key="X"/>     → which question the LLM is asking (drives chip UI)
- *   <answer key="X">Y</answer>       → extractable facts to save
- *   <survey_complete>true</survey_complete> → ready-to-submit signal
- *
- * Returns display text with all tags stripped.
- */
-function parseResponse(text: string): {
-  displayText: string;
-  answers: { key: string; value: string }[];
-  currentQuestionKey: string | null;
-  isComplete: boolean;
-} {
-  const answers: { key: string; value: string }[] = [];
-  const answerRegex = /<answer key="([^"]+)">([^<]*)<\/answer>/g;
-  let match;
-  while ((match = answerRegex.exec(text)) !== null) {
-    answers.push({ key: match[1], value: match[2].trim() });
-  }
-
-  const currentQuestionMatch = text.match(
-    /<current_question key="([^"]+)"\s*\/?>/
-  );
-  const currentQuestionKey =
-    currentQuestionMatch && currentQuestionMatch[1] !== "none"
-      ? currentQuestionMatch[1]
-      : null;
-
-  const isComplete = text.includes("<survey_complete>true</survey_complete>");
-
-  const displayText = text
-    .replace(/<current_question key="[^"]+"\s*\/?>/g, "")
-    .replace(/<answer key="[^"]+">([^<]*)<\/answer>/g, "")
-    .replace(/<survey_complete>true<\/survey_complete>/g, "")
-    .trim();
-
-  return { displayText, answers, currentQuestionKey, isComplete };
-}
-
 export default function ChatInterface({
   answers: initialAnswers = {},
   onAnswer,
@@ -98,9 +59,6 @@ export default function ChatInterface({
   const [apiMessages, setApiMessages] = useState<ApiMessage[]>([]);
   const [inputValue, setInputValue] = useState("");
   const [isTyping, setIsTyping] = useState(false);
-  const [answeredKeys, setAnsweredKeys] = useState<Set<string>>(
-    new Set(Object.keys(initialAnswers))
-  );
   const [llmSignaledComplete, setLlmSignaledComplete] = useState(false);
   const [currentQuestionKey, setCurrentQuestionKey] = useState<string | null>(
     null
@@ -110,15 +68,16 @@ export default function ChatInterface({
   const formRef = useRef<HTMLFormElement>(null);
   const initRef = useRef(false);
 
-  // Count only non-deferrable questions toward progress to keep the meter honest.
-  const answeredNonDeferrable = [...answeredKeys].filter((k) => {
+  // Progress is derived from the `initialAnswers` prop (which is the live
+  // answers map from the parent) — no separate answeredKeys state. Only
+  // non-deferrable questions count toward the meter.
+  const answeredNonDeferrable = Object.keys(initialAnswers).filter((k) => {
     const q = getQuestion(k);
     return q && !q.deferrable;
   }).length;
   const coverage = answeredNonDeferrable / NON_DEFERRABLE_COUNT;
   const canComplete = llmSignaledComplete || coverage >= COMPLETION_THRESHOLD;
 
-  // Scroll to bottom on new messages.
   useEffect(() => {
     scrollRef.current?.scrollTo({
       top: scrollRef.current.scrollHeight,
@@ -145,14 +104,13 @@ export default function ChatInterface({
 
         const data = await res.json();
         const { displayText, answers, currentQuestionKey: nextKey, isComplete } =
-          parseResponse(data.text);
+          parseLLMResponse(data.text);
 
         setCurrentQuestionKey(nextKey);
 
         // Save extracted answers (parent routes to correct DB table via catalog).
         for (const { key, value } of answers) {
           onAnswer?.(key, value);
-          setAnsweredKeys((prev) => new Set([...prev, key]));
         }
 
         // Attach extracted keys to the most recent user message so the UI
@@ -275,7 +233,6 @@ export default function ChatInterface({
     sendToApi(newApiMessages);
   }
 
-  // Look up the catalog entry for the question the LLM is currently asking.
   // Drives chip rendering + input placeholder hint.
   const currentQuestion = currentQuestionKey
     ? getQuestion(currentQuestionKey)

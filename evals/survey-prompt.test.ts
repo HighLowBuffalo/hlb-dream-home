@@ -24,32 +24,10 @@
  */
 
 import Anthropic from "@anthropic-ai/sdk";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { SYSTEM_PROMPT } from "../app/api/chat/prompt";
+import { stripLLMTags } from "../lib/chat/parseLLMResponse";
+import { loadEnv } from "../scripts/util/loadEnv.mjs";
 
-// --- Minimal .env.local loader so the script runs without dotenv ---
-function loadEnv(): void {
-  try {
-    const raw = readFileSync(resolve(".env.local"), "utf8");
-    for (const line of raw.split(/\r?\n/)) {
-      const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith("#")) continue;
-      const eq = trimmed.indexOf("=");
-      if (eq === -1) continue;
-      const key = trimmed.slice(0, eq).trim();
-      const val = trimmed
-        .slice(eq + 1)
-        .trim()
-        .replace(/^["']|["']$/g, "");
-      // Only override if not already set to a non-empty value; Windows
-      // shells often pre-populate vars as empty strings.
-      if (!process.env[key]) process.env[key] = val;
-    }
-  } catch {
-    /* rely on shell env */
-  }
-}
 loadEnv();
 
 const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -208,12 +186,7 @@ const CASES: EvalCase[] = [
       { role: "user", content: "Two adults, two kids ages 8 and 10" },
     ],
     assert: (text) => {
-      // Strip tags, measure conversational sentence count.
-      const visible = text
-        .replace(/<current_question key="[^"]+"\s*\/?>/g, "")
-        .replace(/<answer[^>]*>.*?<\/answer>/gs, "")
-        .replace(/<survey_complete>.*?<\/survey_complete>/gs, "")
-        .trim();
+      const visible = stripLLMTags(text);
       // Rough sentence count: split on . ? ! then filter empties.
       const sentences = visible
         .split(/(?<=[.!?])\s+/)
@@ -222,9 +195,11 @@ const CASES: EvalCase[] = [
       if (sentences.length > 3) {
         return `Response too long (${sentences.length} sentences). Visible text: "${visible.slice(0, 300)}"`;
       }
-      // And must contain at most ONE question mark (acknowledgement + next Q).
+      // Catalog has legitimate compound questions (e.g. "What do you love
+      // about where you live now? And what are you most eager to leave
+      // behind?") with 2 ?s, so ≤2 is baseline; 3+ means real probing.
       const qMarks = (visible.match(/\?/g) || []).length;
-      if (qMarks > 1) {
+      if (qMarks > 2) {
         return `Response contained ${qMarks} questions (probing). Visible: "${visible.slice(0, 300)}"`;
       }
       return null;
@@ -287,15 +262,9 @@ const CASES: EvalCase[] = [
       { role: "user", content: "skip" },
     ],
     assert: (text) => {
-      // Strip answer tags — those are metadata, not user-visible. A skip-tag
-      // containing "budgetRange" is correct behavior; only the visible text
-      // tells us whether the model re-asked.
-      const visible = lc(
-        text
-          .replace(/<current_question key="[^"]+"\s*\/?>/g, "")
-          .replace(/<answer[^>]*>.*?<\/answer>/gs, "")
-          .replace(/<survey_complete>.*?<\/survey_complete>/gs, "")
-      );
+      // Strip metadata tags so a skip-tag containing "budgetRange" isn't
+      // mistaken for a re-ask. Only the visible text decides.
+      const visible = lc(stripLLMTags(text));
       const reasks = ["budget", "how much", "construction cost"];
       const hit = reasks.find((m) => visible.includes(m));
       if (hit) {
