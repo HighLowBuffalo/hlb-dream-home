@@ -13,12 +13,34 @@ interface Submission {
   created_at: string;
   updated_at: string;
   completed_at: string | null;
+  email: string | null;
 }
 
 export default function AdminDashboard() {
   const router = useRouter();
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  async function handleDelete(e: React.MouseEvent, sub: Submission) {
+    e.stopPropagation();
+    const label = sub.client_name || sub.email || "this submission";
+    if (!window.confirm(`Delete ${label}? This cannot be undone.`)) return;
+    setDeletingId(sub.id);
+    try {
+      const res = await fetch(`/api/admin/submissions/${sub.id}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        setSubmissions((prev) => prev.filter((s) => s.id !== sub.id));
+      } else {
+        const body = await res.json().catch(() => ({}));
+        window.alert(body.error || "Failed to delete.");
+      }
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   useEffect(() => {
     async function load() {
@@ -77,6 +99,9 @@ export default function AdminDashboard() {
                   Client
                 </th>
                 <th className="py-2 text-[10px] font-medium tracking-[0.18em] uppercase">
+                  Email
+                </th>
+                <th className="py-2 text-[10px] font-medium tracking-[0.18em] uppercase">
                   Project
                 </th>
                 <th className="py-2 text-[10px] font-medium tracking-[0.18em] uppercase">
@@ -88,6 +113,7 @@ export default function AdminDashboard() {
                 <th className="py-2 text-[10px] font-medium tracking-[0.18em] uppercase">
                   Completed
                 </th>
+                <th className="py-2" aria-label="Actions" />
               </tr>
             </thead>
             <tbody>
@@ -98,6 +124,7 @@ export default function AdminDashboard() {
                   className="border-b border-gray-200 cursor-pointer hover:bg-gray-100 transition-colors"
                 >
                   <td className="py-3">{sub.client_name || "Unknown"}</td>
+                  <td className="py-3 text-gray-600">{sub.email || "\u2014"}</td>
                   <td className="py-3 text-gray-600">
                     {sub.project_name || "\u2014"}
                   </td>
@@ -115,6 +142,16 @@ export default function AdminDashboard() {
                   <td className="py-3 text-gray-600">{formatDate(sub.created_at)}</td>
                   <td className="py-3 text-gray-600">
                     {formatDate(sub.completed_at)}
+                  </td>
+                  <td className="py-3 text-right">
+                    <button
+                      type="button"
+                      onClick={(e) => handleDelete(e, sub)}
+                      disabled={deletingId === sub.id}
+                      className="text-[10px] font-medium tracking-[0.18em] uppercase text-gray-400 hover:text-black transition-colors disabled:opacity-50"
+                    >
+                      {deletingId === sub.id ? "Deleting\u2026" : "Delete"}
+                    </button>
                   </td>
                 </tr>
               ))}

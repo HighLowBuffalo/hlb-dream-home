@@ -22,15 +22,22 @@ export async function GET() {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  // Admins can read all submissions via RLS policy
+  // Admins can read all submissions via RLS policy. Join profiles to
+  // surface the owner's email in the admin list.
   const { data, error } = await supabase
     .from("submissions")
-    .select("*")
+    .select("*, profiles(email)")
     .order("updated_at", { ascending: false });
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json(data);
+  type Row = Record<string, unknown> & { profiles?: { email?: string | null } | null };
+  const flattened = (data as Row[]).map(({ profiles, ...rest }) => ({
+    ...rest,
+    email: profiles?.email ?? null,
+  }));
+
+  return NextResponse.json(flattened);
 }
