@@ -230,34 +230,38 @@ export default function ChatInterface({
         <SaveIndicator status={saveStatus} />
       </div>
 
-      {/* Messages */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-6">
-        {messages.map((msg) => (
-          <Message key={msg.id} sender={msg.sender} text={msg.text} />
-        ))}
-        {isTyping && <TypingIndicator />}
+      {/* Messages — scrollable area */}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto min-h-0">
+        <div className="max-w-2xl mx-auto px-6 py-6">
+          {messages.map((msg) => (
+            <Message key={msg.id} sender={msg.sender} text={msg.text} />
+          ))}
+          {isTyping && <TypingIndicator />}
+        </div>
       </div>
 
-      {/* Input */}
-      <form
-        onSubmit={handleSubmit}
-        className="flex items-end gap-4 px-6 py-4 border-t border-gray-200"
-      >
-        <div className="flex-1">
-          <Input
-            ref={inputRef}
-            type="text"
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            placeholder="Type your answer..."
-            disabled={isTyping}
-            autoFocus
-          />
-        </div>
-        <Button type="submit" disabled={!inputValue.trim() || isTyping}>
-          Send
-        </Button>
-      </form>
+      {/* Input — pinned to bottom */}
+      <div className="border-t border-gray-200 bg-white">
+        <form
+          onSubmit={handleSubmit}
+          className="flex items-end gap-4 px-6 py-4 max-w-2xl mx-auto"
+        >
+          <div className="flex-1">
+            <Input
+              ref={inputRef}
+              type="text"
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              placeholder="Type your answer..."
+              disabled={isTyping}
+              autoFocus
+            />
+          </div>
+          <Button type="submit" disabled={!inputValue.trim() || isTyping}>
+            Send
+          </Button>
+        </form>
+      </div>
     </div>
   );
 }
