@@ -21,7 +21,8 @@ function loadEnv() {
       if (eq === -1) continue;
       const key = trimmed.slice(0, eq).trim();
       const val = trimmed.slice(eq + 1).trim().replace(/^["']|["']$/g, "");
-      if (!(key in process.env)) process.env[key] = val;
+      // Windows shells often pre-populate vars as "" — check truthy, not presence.
+      if (!process.env[key]) process.env[key] = val;
     }
   } catch {
     // Fine — rely on shell env.

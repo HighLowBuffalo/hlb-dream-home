@@ -1,7 +1,6 @@
 "use client";
 
-import { PROGRAM_QUESTIONS } from "@/lib/data/questions";
-import { SOUL_QUESTIONS } from "@/lib/data/soulQuestions";
+import { PROGRAM_QUESTIONS, SOUL_QUESTIONS } from "@/lib/data/questions";
 import QuestionFlags, { type FlagType } from "./QuestionFlags";
 
 interface FlaggedReviewProps {
@@ -15,7 +14,7 @@ function findQuestion(key: string): { text: string; section: "Program" | "Soul" 
   const p = PROGRAM_QUESTIONS.find((q) => q.key === key);
   if (p) return { text: p.text, section: "Program" };
   const s = SOUL_QUESTIONS.find((q) => q.key === key);
-  if (s) return { text: s.q, section: "Soul" };
+  if (s) return { text: s.text, section: "Soul" };
   return null;
 }
 

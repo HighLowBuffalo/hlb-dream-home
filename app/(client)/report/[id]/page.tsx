@@ -2,9 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { PROGRAM_QUESTIONS } from "@/lib/data/questions";
-import { SOUL_QUESTIONS } from "@/lib/data/soulQuestions";
-import { SPACE_DEFAULTS } from "@/lib/data/spaceDefaults";
+import { PROGRAM_QUESTIONS, SOUL_QUESTIONS } from "@/lib/data/questions";
+import { buildSpaceTable, type Space } from "@/lib/report/buildSpaceTable";
 import Button from "@/components/ui/Button";
 import QuestionFlags, { type FlagType } from "@/components/ui/QuestionFlags";
 import UploadedImages from "@/components/ui/UploadedImages";
@@ -43,21 +42,6 @@ interface Submission {
   images?: Image[];
 }
 
-// Map program answer keys to space defaults for the space program table
-const SPACE_KEY_MAP: Record<string, { label: string; defaultKey: string }[]> = {
-  beds: [],
-  primaryBed: [{ label: "Primary Bedroom", defaultKey: "primaryBed" }],
-  primaryBath: [{ label: "Primary Bathroom", defaultKey: "primaryBath" }],
-  primaryCloset: [{ label: "Primary Closet", defaultKey: "primaryCloset" }],
-  kitchen: [{ label: "Kitchen", defaultKey: "kitchen" }],
-  entryMud: [
-    { label: "Foyer / Entry", defaultKey: "foyer" },
-    { label: "Mudroom", defaultKey: "mudroom" },
-  ],
-  laundry: [{ label: "Laundry", defaultKey: "laundry" }],
-  office: [{ label: "Home Office", defaultKey: "office" }],
-};
-
 // Group program questions into labeled sections for display
 const PROGRAM_SECTIONS = [
   { title: "Project Basics", keys: ["name", "address", "projectName", "projectType"] },
@@ -75,115 +59,15 @@ const PROGRAM_SECTIONS = [
   { title: "Final Notes", keys: ["pNotes"] },
 ];
 
-function buildSpaceTable(answers: Record<string, string>) {
-  const spaces: { name: string; dims: string; sqft: number }[] = [];
-
-  // Always include core spaces
-  const coreSpaces = [
-    { key: "foyer", label: "Foyer / Entry" },
-    { key: "living", label: "Living Room" },
-    { key: "kitchen", label: "Kitchen" },
-    { key: "primaryBed", label: "Primary Bedroom" },
-    { key: "primaryBath", label: "Primary Bathroom" },
-    { key: "primaryCloset", label: "Primary Closet" },
-    { key: "laundry", label: "Laundry" },
-  ];
-
-  for (const s of coreSpaces) {
-    const def = SPACE_DEFAULTS[s.key];
-    if (def) spaces.push({ name: s.label, dims: def.dims, sqft: def.sqft });
-  }
-
-  // Bedrooms based on count
-  const bedCount = parseInt(answers.beds || "3", 10);
-  const guestBedCount = Math.max(0, bedCount - 1);
-  for (let i = 0; i < guestBedCount; i++) {
-    const def = SPACE_DEFAULTS.bedroom;
-    spaces.push({ name: `Bedroom ${i + 2}`, dims: def.dims, sqft: def.sqft });
-  }
-
-  // Bathrooms based on count
-  const bathCount = parseInt(answers.baths || "2", 10);
-  const otherBaths = Math.max(0, bathCount - 1); // minus primary
-  for (let i = 0; i < otherBaths; i++) {
-    const def = SPACE_DEFAULTS.sharedBath;
-    spaces.push({ name: i === otherBaths - 1 ? "Powder Bath" : `Bathroom ${i + 2}`, dims: i === otherBaths - 1 ? SPACE_DEFAULTS.powderBath.dims : def.dims, sqft: i === otherBaths - 1 ? SPACE_DEFAULTS.powderBath.sqft : def.sqft });
-  }
-
-  // Dining
-  const diningSeats = parseInt(answers.diningSeats || answers.dining || "6", 10);
-  const diningKey = diningSeats > 10 ? "diningLarge" : "diningSmall";
-  const diningDef = SPACE_DEFAULTS[diningKey];
-  spaces.push({ name: "Dining Room", dims: diningDef.dims, sqft: diningDef.sqft });
-
-  // Office
-  if (answers.office && answers.office.toLowerCase() !== "no") {
-    const def = SPACE_DEFAULTS.office;
-    spaces.push({ name: "Home Office", dims: def.dims, sqft: def.sqft });
-  }
-
-  // Mudroom
-  if (answers.entryMud && answers.entryMud.toLowerCase().includes("mud")) {
-    const def = SPACE_DEFAULTS.mudroom;
-    spaces.push({ name: "Mudroom", dims: def.dims, sqft: def.sqft });
-  }
-
-  // Special rooms
-  const specialMap: Record<string, { label: string; key: string }> = {
-    "gym": { label: "Gym / Workout Room", key: "gym" },
-    "workout": { label: "Gym / Workout Room", key: "gym" },
-    "media": { label: "Media Room", key: "mediaRoom" },
-    "theater": { label: "Media Room", key: "mediaRoom" },
-    "library": { label: "Library / Reading Room", key: "library" },
-    "reading": { label: "Library / Reading Room", key: "library" },
-    "wine": { label: "Wine Cellar", key: "wineCellar" },
-    "playroom": { label: "Playroom", key: "playroom" },
-    "in-law": { label: "In-Law Suite", key: "inLawSuite" },
-  };
-
-  if (answers.specialRooms) {
-    const selected = answers.specialRooms.toLowerCase();
-    const added = new Set<string>();
-    for (const [keyword, info] of Object.entries(specialMap)) {
-      if (selected.includes(keyword) && !added.has(info.key)) {
-        added.add(info.key);
-        const def = SPACE_DEFAULTS[info.key];
-        if (def) spaces.push({ name: info.label, dims: def.dims, sqft: def.sqft });
-      }
-    }
-  }
-
-  // Garage
-  const garageCount = parseInt(answers.garageCount || "2", 10);
-  if (garageCount > 0) {
-    const garageKey = garageCount >= 3 ? "garage3" : garageCount === 2 ? "garage2" : "garage1";
-    const def = SPACE_DEFAULTS[garageKey];
-    spaces.push({ name: `${garageCount}-Car Garage`, dims: def.dims, sqft: def.sqft });
-  }
-
-  // Outdoor
-  if (answers.outdoor) {
-    const outdoor = answers.outdoor.toLowerCase();
-    if (outdoor.includes("covered") || outdoor.includes("patio") || outdoor.includes("porch")) {
-      const def = SPACE_DEFAULTS.coveredPatio;
-      spaces.push({ name: "Covered Patio / Porch", dims: def.dims, sqft: def.sqft });
-    }
-  }
-  if (answers.outdoorKitchen && answers.outdoorKitchen.toLowerCase().includes("yes")) {
-    const def = SPACE_DEFAULTS.outdoorKitchen;
-    spaces.push({ name: "Outdoor Kitchen", dims: def.dims, sqft: def.sqft });
-  }
-  if (answers.outdoorPool) {
-    const pool = answers.outdoorPool.toLowerCase();
-    if (pool.includes("pool") || pool.includes("both")) {
-      spaces.push({ name: "Pool", dims: SPACE_DEFAULTS.pool.dims, sqft: SPACE_DEFAULTS.pool.sqft });
-    }
-    if (pool.includes("hot tub") || pool.includes("both")) {
-      spaces.push({ name: "Hot Tub", dims: SPACE_DEFAULTS.hotTub.dims, sqft: SPACE_DEFAULTS.hotTub.sqft });
-    }
-  }
-
-  return spaces;
+// Render helper: one row in the Space Program table.
+function SpaceRow({ space }: { space: Space }) {
+  return (
+    <tr className="border-b border-gray-200">
+      <td className="py-2">{space.name}</td>
+      <td className="py-2 text-gray-600">{space.dims}</td>
+      <td className="py-2 text-right">{space.sqft.toLocaleString()}</td>
+    </tr>
+  );
 }
 
 export default function ReportPage() {
@@ -264,8 +148,8 @@ export default function ReportPage() {
     questionTextMap[q.key] = q.text;
   }
 
-  const spaces = buildSpaceTable(programMap);
-  const totalSqft = spaces.reduce((sum, s) => sum + s.sqft, 0);
+  const { mainHouse, detached, mainHouseSqft, detachedSqft, totalSqft } =
+    buildSpaceTable(programMap);
 
   const completedDate = submission.completed_at
     ? new Date(submission.completed_at).toLocaleDateString("en-US", {
@@ -325,17 +209,50 @@ export default function ReportPage() {
               </tr>
             </thead>
             <tbody>
-              {spaces.map((space, i) => (
-                <tr key={i} className="border-b border-gray-200">
-                  <td className="py-2">{space.name}</td>
-                  <td className="py-2 text-gray-600">{space.dims}</td>
-                  <td className="py-2 text-right">{space.sqft.toLocaleString()}</td>
-                </tr>
-              ))}
-              <tr className="border-t border-black">
-                <td className="py-2 font-medium">Total</td>
-                <td className="py-2"></td>
-                <td className="py-2 text-right font-medium">
+              {mainHouse.length > 0 && (
+                <>
+                  <tr>
+                    <td colSpan={3} className="pt-4 pb-2 text-[10px] font-medium tracking-[0.18em] uppercase text-gray-400">
+                      Main House (attached)
+                    </td>
+                  </tr>
+                  {mainHouse.map((space, i) => (
+                    <SpaceRow key={`m-${i}`} space={space} />
+                  ))}
+                  <tr className="border-t border-gray-400">
+                    <td className="py-2 font-medium">Subtotal</td>
+                    <td className="py-2"></td>
+                    <td className="py-2 text-right font-medium">
+                      {mainHouseSqft.toLocaleString()} sf
+                    </td>
+                  </tr>
+                </>
+              )}
+
+              {detached.length > 0 && (
+                <>
+                  <tr>
+                    <td colSpan={3} className="pt-6 pb-2 text-[10px] font-medium tracking-[0.18em] uppercase text-gray-400">
+                      Detached &amp; Outdoor
+                    </td>
+                  </tr>
+                  {detached.map((space, i) => (
+                    <SpaceRow key={`d-${i}`} space={space} />
+                  ))}
+                  <tr className="border-t border-gray-400">
+                    <td className="py-2 font-medium">Subtotal</td>
+                    <td className="py-2"></td>
+                    <td className="py-2 text-right font-medium">
+                      {detachedSqft.toLocaleString()} sf
+                    </td>
+                  </tr>
+                </>
+              )}
+
+              <tr className="border-t-2 border-black">
+                <td className="pt-3 pb-2 font-medium">Total</td>
+                <td className="pt-3 pb-2"></td>
+                <td className="pt-3 pb-2 text-right font-medium">
                   {totalSqft.toLocaleString()} sf
                 </td>
               </tr>

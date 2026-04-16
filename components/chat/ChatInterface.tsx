@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { PROGRAM_QUESTIONS } from "@/lib/data/questions";
+import { QUESTIONS, getQuestion } from "@/lib/data/questions";
 import Message from "./Message";
 import TypingIndicator from "./TypingIndicator";
+import FinalReview from "./FinalReview";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import ProgressBar from "@/components/ui/ProgressBar";
@@ -16,6 +17,7 @@ interface ChatMessage {
   id: string;
   sender: "hlb" | "user";
   text: string;
+  /** question_keys the LLM extracted from this turn — used for flag + upload UI. */
   extractedKeys?: string[];
 }
 
@@ -25,18 +27,25 @@ interface ApiMessage {
 }
 
 interface ChatInterfaceProps {
+  /** Combined program + soul answers keyed by question_key. */
   answers?: Record<string, string>;
   onAnswer?: (key: string, value: string) => void;
-  onComplete?: () => void;
   saveStatus?: SaveStatus;
-  submissionId?: string | null;
+  submissionId: string;
+  programAnswers?: Record<string, string>;
+  soulAnswers?: Record<string, string>;
   flags?: Record<string, Set<FlagType>>;
   onToggleFlag?: (questionKey: string, flag: FlagType) => void;
 }
 
+// Non-deferrable count drives the "threshold" path to revealing the Complete
+// button even if the LLM forgets to emit <survey_complete>.
+const NON_DEFERRABLE_COUNT = QUESTIONS.filter((q) => !q.deferrable).length;
+const COMPLETION_THRESHOLD = 0.8;
+
 /**
- * Parse <answer key="...">...</answer> tags from Claude's response.
- * Returns the display text (tags stripped) and extracted answers.
+ * Parse <answer key="...">...</answer> tags and <survey_complete> from the
+ * LLM response. Returns display text (tags stripped) + extracted answers.
  */
 function parseResponse(text: string): {
   displayText: string;
@@ -52,7 +61,6 @@ function parseResponse(text: string): {
 
   const isComplete = text.includes("<survey_complete>true</survey_complete>");
 
-  // Strip tags from display text
   const displayText = text
     .replace(/<answer key="[^"]+">([^<]*)<\/answer>/g, "")
     .replace(/<survey_complete>true<\/survey_complete>/g, "")
@@ -64,8 +72,10 @@ function parseResponse(text: string): {
 export default function ChatInterface({
   answers: initialAnswers = {},
   onAnswer,
-  onComplete,
   saveStatus = "idle",
+  submissionId,
+  programAnswers = {},
+  soulAnswers = {},
   flags,
   onToggleFlag,
 }: ChatInterfaceProps) {
@@ -76,21 +86,33 @@ export default function ChatInterface({
   const [answeredKeys, setAnsweredKeys] = useState<Set<string>>(
     new Set(Object.keys(initialAnswers))
   );
+  const [llmSignaledComplete, setLlmSignaledComplete] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const initRef = useRef(false);
 
-  const answeredCount = answeredKeys.size;
+  // Count only non-deferrable questions toward progress to keep the meter honest.
+  const answeredNonDeferrable = [...answeredKeys].filter((k) => {
+    const q = getQuestion(k);
+    return q && !q.deferrable;
+  }).length;
+  const coverage = answeredNonDeferrable / NON_DEFERRABLE_COUNT;
+  const canComplete = llmSignaledComplete || coverage >= COMPLETION_THRESHOLD;
 
-  // Scroll to bottom on new messages
+  // Scroll to bottom on new messages.
   useEffect(() => {
     scrollRef.current?.scrollTo({
       top: scrollRef.current.scrollHeight,
       behavior: "smooth",
     });
-  }, [messages, isTyping]);
+  }, [messages, isTyping, canComplete]);
 
-  // Send message to Claude API
+  // Refocus the input whenever the assistant stops typing — fixes the
+  // per-turn friction the user flagged in the PDF.
+  useEffect(() => {
+    if (!isTyping) inputRef.current?.focus();
+  }, [isTyping]);
+
   const sendToApi = useCallback(
     async (newApiMessages: ApiMessage[]) => {
       setIsTyping(true);
@@ -100,22 +122,19 @@ export default function ChatInterface({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ messages: newApiMessages }),
         });
-
-        if (!res.ok) {
-          throw new Error("Chat API failed");
-        }
+        if (!res.ok) throw new Error("Chat API failed");
 
         const data = await res.json();
         const { displayText, answers, isComplete } = parseResponse(data.text);
 
-        // Save extracted answers
+        // Save extracted answers (parent routes to correct DB table via catalog).
         for (const { key, value } of answers) {
           onAnswer?.(key, value);
           setAnsweredKeys((prev) => new Set([...prev, key]));
         }
 
-        // Attach extracted question keys to the most recent user message so
-        // the user can flag that Q/A with "come back to this" / "flexible".
+        // Attach extracted keys to the most recent user message so the UI
+        // can show flag + upload controls under it.
         if (answers.length > 0) {
           const newKeys = answers.map((a) => a.key);
           setMessages((prev) => {
@@ -133,25 +152,16 @@ export default function ChatInterface({
           });
         }
 
-        // Add assistant message
-        const assistantMsg: ChatMessage = {
-          id: `hlb-${Date.now()}`,
-          sender: "hlb",
-          text: displayText,
-        };
-        setMessages((prev) => [...prev, assistantMsg]);
-
-        // Update API message history with the raw response (including tags)
+        setMessages((prev) => [
+          ...prev,
+          { id: `hlb-${Date.now()}`, sender: "hlb", text: displayText },
+        ]);
         setApiMessages((prev) => [
           ...prev,
           { role: "assistant" as const, content: data.text },
         ]);
 
-        if (isComplete) {
-          setTimeout(() => onComplete?.(), 1500);
-        }
-
-        inputRef.current?.focus();
+        if (isComplete) setLlmSignaledComplete(true);
       } catch {
         setMessages((prev) => [
           ...prev,
@@ -165,22 +175,21 @@ export default function ChatInterface({
         setIsTyping(false);
       }
     },
-    [onAnswer, onComplete]
+    [onAnswer]
   );
 
-  // Start conversation
+  // Kick off the conversation. On resume, summarize prior answers.
   useEffect(() => {
     if (initRef.current) return;
     initRef.current = true;
 
-    const resumeAnswers = Object.keys(initialAnswers);
+    const resumeKeys = Object.keys(initialAnswers);
     let startMessage: ApiMessage;
 
-    if (resumeAnswers.length > 0) {
-      // Resuming — tell Claude what we already know
-      const summary = resumeAnswers
+    if (resumeKeys.length > 0) {
+      const summary = resumeKeys
         .map((key) => {
-          const q = PROGRAM_QUESTIONS.find((pq) => pq.key === key);
+          const q = getQuestion(key);
           return `${q?.text || key}: ${initialAnswers[key]}`;
         })
         .join("\n");
@@ -200,8 +209,7 @@ export default function ChatInterface({
     } else {
       startMessage = {
         role: "user",
-        content:
-          "Hi, I'm ready to start the home programming questionnaire.",
+        content: "Hi, I'm ready to start the home programming questionnaire.",
       };
 
       setMessages([
@@ -226,13 +234,11 @@ export default function ChatInterface({
     const userText = inputValue.trim();
     setInputValue("");
 
-    // Add user message to UI
     setMessages((prev) => [
       ...prev,
       { id: `user-${Date.now()}`, sender: "user", text: userText },
     ]);
 
-    // Add to API messages and send
     const newApiMessages = [
       ...apiMessages,
       { role: "user" as const, content: userText },
@@ -247,15 +253,15 @@ export default function ChatInterface({
       <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 gap-4">
         <div className="flex-1 min-w-0">
           <ProgressBar
-            current={answeredCount}
-            total={PROGRAM_QUESTIONS.length}
-            label="The Program"
+            current={answeredNonDeferrable}
+            total={NON_DEFERRABLE_COUNT}
+            label="Your programming survey"
           />
         </div>
         <SaveIndicator status={saveStatus} />
       </div>
 
-      {/* Messages — scrollable area */}
+      {/* Messages + FinalReview — scrollable area */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto min-h-0">
         <div className="max-w-2xl mx-auto px-6 py-6">
           {messages.map((msg) => (
@@ -266,10 +272,21 @@ export default function ChatInterface({
               extractedKeys={msg.extractedKeys}
               flags={flags}
               onToggleFlag={onToggleFlag}
+              submissionId={submissionId}
             />
           ))}
           {isTyping && <TypingIndicator />}
         </div>
+
+        {canComplete && (
+          <FinalReview
+            submissionId={submissionId}
+            programAnswers={programAnswers}
+            soulAnswers={soulAnswers}
+            flags={flags || {}}
+            onToggleFlag={onToggleFlag}
+          />
+        )}
       </div>
 
       {/* Input — pinned to bottom */}

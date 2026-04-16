@@ -3,21 +3,33 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import ChatInterface from "@/components/chat/ChatInterface";
-import SoulView from "@/components/soul/SoulView";
 import Button from "@/components/ui/Button";
+import { getQuestion } from "@/lib/data/questions";
 import type { FlagType } from "@/components/ui/QuestionFlags";
 import { createClient } from "@/lib/supabase/client";
 
 type SaveStatus = "idle" | "saving" | "saved" | "error";
-type Phase = "program" | "soul";
 
 export type FlagsByKey = Record<string, Set<FlagType>>;
 
+/**
+ * Unified chat-driven survey.
+ *
+ *   ┌── answers (combined) ─────────────────────────────┐
+ *   │   keyed by question_key; split at save time via   │
+ *   │   the catalog's `table` field into program_answers│
+ *   │   or soul_answers.                                │
+ *   └───────────────────────────────────────────────────┘
+ *
+ * The "phase" concept is gone — the LLM handles the program → soul
+ * transition as part of the conversation. Completion is managed inside
+ * ChatInterface via a Complete button revealed by LLM signal or threshold.
+ */
 export default function SurveyPage() {
   const router = useRouter();
-  const [phase, setPhase] = useState<Phase>("program");
   const [submissionId, setSubmissionId] = useState<string | null>(null);
   const submissionIdRef = useRef<string | null>(null);
+  const [answers, setAnswers] = useState<Record<string, string>>({});
   const [programAnswers, setProgramAnswers] = useState<Record<string, string>>({});
   const [soulAnswers, setSoulAnswers] = useState<Record<string, string>>({});
   const [flags, setFlags] = useState<FlagsByKey>({});
@@ -25,12 +37,11 @@ export default function SurveyPage() {
   const [loading, setLoading] = useState(true);
   const [initError, setInitError] = useState<string | null>(null);
 
-  // Keep ref in sync so callbacks always have latest value
   useEffect(() => {
     submissionIdRef.current = submissionId;
   }, [submissionId]);
 
-  // On mount: find existing submission or create one
+  // On mount: find existing submission or create one.
   useEffect(() => {
     async function init() {
       try {
@@ -47,8 +58,6 @@ export default function SurveyPage() {
         }
 
         const submissions = await res.json();
-
-        // Find existing submission: prefer in_progress, fall back to most recent
         const existing =
           submissions.find((s: { status: string }) => s.status === "in_progress") ||
           (submissions.length > 0 ? submissions[0] : null);
@@ -57,23 +66,21 @@ export default function SurveyPage() {
           setSubmissionId(existing.id);
           submissionIdRef.current = existing.id;
 
-          // Load existing answers
           const detailRes = await fetch(`/api/submissions/${existing.id}`);
           if (detailRes.ok) {
             const detail = await detailRes.json();
-            const pAnswers: Record<string, string> = {};
+            const pMap: Record<string, string> = {};
             for (const a of detail.programAnswers) {
-              pAnswers[a.question_key] = a.answer_text || "";
+              pMap[a.question_key] = a.answer_text || "";
             }
-            setProgramAnswers(pAnswers);
-
-            const sAnswers: Record<string, string> = {};
+            const sMap: Record<string, string> = {};
             for (const a of detail.soulAnswers) {
-              sAnswers[a.question_key] = a.answer_text || "";
+              sMap[a.question_key] = a.answer_text || "";
             }
-            setSoulAnswers(sAnswers);
+            setProgramAnswers(pMap);
+            setSoulAnswers(sMap);
+            setAnswers({ ...pMap, ...sMap });
 
-            // Hydrate flags
             const loadedFlags: FlagsByKey = {};
             for (const f of detail.flags || []) {
               if (!loadedFlags[f.question_key]) {
@@ -82,13 +89,8 @@ export default function SurveyPage() {
               loadedFlags[f.question_key].add(f.flag_type as FlagType);
             }
             setFlags(loadedFlags);
-
-            if (Object.keys(sAnswers).length > 0 || Object.keys(pAnswers).length >= 30) {
-              setPhase("soul");
-            }
           }
         } else {
-          // No submissions — create a new one
           const createRes = await fetch("/api/submissions", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -101,9 +103,7 @@ export default function SurveyPage() {
           } else {
             const err = await createRes.json().catch(() => ({}));
             console.error("Failed to create submission:", err);
-            setInitError(
-              "Could not start your session. Please try signing in again."
-            );
+            setInitError("Could not start your session. Please try signing in again.");
           }
         }
       } catch (err) {
@@ -116,7 +116,7 @@ export default function SurveyPage() {
     init();
   }, [router]);
 
-  // Session heartbeat: check every 5 minutes that the session is still valid
+  // Session heartbeat
   useEffect(() => {
     const interval = setInterval(async () => {
       const supabase = createClient();
@@ -128,10 +128,27 @@ export default function SurveyPage() {
     return () => clearInterval(interval);
   }, []);
 
-  const saveAnswer = useCallback(
-    async (key: string, value: string, table: "program" | "soul" = "program") => {
+  /**
+   * Single save path for ALL answers. The catalog tells us which table
+   * each question_key belongs to — program or soul — so the LLM stays
+   * dumb about storage and the UI stays uniform.
+   */
+  const handleAnswer = useCallback(
+    async (key: string, value: string) => {
       const sid = submissionIdRef.current;
       if (!sid) return;
+
+      const q = getQuestion(key);
+      // Extracted override keys (e.g. officeLocation) or legacy keys may not
+      // appear in the catalog. Default those to "program" so they still save.
+      const table = q?.table ?? "program";
+
+      setAnswers((prev) => ({ ...prev, [key]: value }));
+      if (table === "soul") {
+        setSoulAnswers((prev) => ({ ...prev, [key]: value }));
+      } else {
+        setProgramAnswers((prev) => ({ ...prev, [key]: value }));
+      }
 
       setSaveStatus("saving");
       try {
@@ -145,13 +162,12 @@ export default function SurveyPage() {
             table,
           }),
         });
-
         if (!res.ok) {
           setSaveStatus("error");
           return;
         }
 
-        // Update submission metadata from certain keys
+        // Propagate metadata fields to the submission row.
         if (table === "program" && ["name", "address", "projectName", "projectType"].includes(key)) {
           const metaMap: Record<string, string> = {
             name: "clientName",
@@ -178,32 +194,11 @@ export default function SurveyPage() {
     []
   );
 
-  const handleProgramAnswer = useCallback(
-    (key: string, value: string) => {
-      setProgramAnswers((prev) => ({ ...prev, [key]: value }));
-      saveAnswer(key, value, "program");
-    },
-    [saveAnswer]
-  );
-
-  const handleSoulSave = useCallback(
-    (key: string, value: string) => {
-      setSoulAnswers((prev) => ({ ...prev, [key]: value }));
-      saveAnswer(key, value, "soul");
-    },
-    [saveAnswer]
-  );
-
-  const handleProgramComplete = useCallback(() => {
-    setPhase("soul");
-  }, []);
-
   const handleToggleFlag = useCallback(
     async (questionKey: string, flagType: FlagType) => {
       const sid = submissionIdRef.current;
       if (!sid) return;
 
-      // Optimistic update
       setFlags((prev) => {
         const next = { ...prev };
         const existing = new Set(next[questionKey] || []);
@@ -250,9 +245,7 @@ export default function SurveyPage() {
       <div className="flex flex-1 items-center justify-center px-6">
         <div className="w-full max-w-md text-center">
           <p className="text-sm font-light text-gray-600 mb-6">{initError}</p>
-          <Button onClick={() => router.push("/login")}>
-            Sign in again
-          </Button>
+          <Button onClick={() => router.push("/login")}>Sign in again</Button>
         </div>
       </div>
     );
@@ -265,9 +258,7 @@ export default function SurveyPage() {
           <p className="text-sm font-light text-gray-600 mb-6">
             Something went wrong setting up your session.
           </p>
-          <Button onClick={() => window.location.reload()}>
-            Try again
-          </Button>
+          <Button onClick={() => window.location.reload()}>Try again</Button>
         </div>
       </div>
     );
@@ -275,27 +266,16 @@ export default function SurveyPage() {
 
   return (
     <div className="flex flex-col h-full">
-      {phase === "program" ? (
-        <ChatInterface
-          answers={programAnswers}
-          onAnswer={handleProgramAnswer}
-          onComplete={handleProgramComplete}
-          saveStatus={saveStatus}
-          submissionId={submissionId}
-          flags={flags}
-          onToggleFlag={handleToggleFlag}
-        />
-      ) : (
-        <SoulView
-          answers={soulAnswers}
-          saveStatus={saveStatus}
-          onSave={handleSoulSave}
-          submissionId={submissionId}
-          programAnswers={programAnswers}
-          flags={flags}
-          onToggleFlag={handleToggleFlag}
-        />
-      )}
+      <ChatInterface
+        answers={answers}
+        programAnswers={programAnswers}
+        soulAnswers={soulAnswers}
+        onAnswer={handleAnswer}
+        saveStatus={saveStatus}
+        submissionId={submissionId}
+        flags={flags}
+        onToggleFlag={handleToggleFlag}
+      />
     </div>
   );
 }

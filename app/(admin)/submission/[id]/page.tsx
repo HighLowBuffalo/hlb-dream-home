@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { PROGRAM_QUESTIONS } from "@/lib/data/questions";
-import { SOUL_QUESTIONS } from "@/lib/data/soulQuestions";
+import { PROGRAM_QUESTIONS, SOUL_QUESTIONS } from "@/lib/data/questions";
 import Button from "@/components/ui/Button";
 import QuestionFlags, { type FlagType } from "@/components/ui/QuestionFlags";
 import UploadedImages from "@/components/ui/UploadedImages";

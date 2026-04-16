@@ -68,7 +68,100 @@ Work that has been considered and scoped but not built. Each item has the reason
 
 ---
 
-## 3. Custom subdomain deployment
+## 3. Eval CI integration
+
+**What:** Run `evals/survey-prompt.test.mjs` on every PR via GitHub Actions; post results as a PR comment.
+
+**Why:** Regression protection for prompt behavior without relying on manual discipline. Today's eval harness is run by hand before pushes; CI enforces it across contributors and across time.
+
+**Pros:**
+- Catches prompt regressions on every change, not just when someone remembers to run evals.
+- Forces awareness of eval failures instead of letting them accumulate.
+- Scales naturally if/when a second dev joins.
+
+**Cons:**
+- ~$0.10 per PR in Haiku API cost.
+- Secret management for `ANTHROPIC_API_KEY` in GitHub Actions.
+- Stochastic LLM outputs create occasional flakes; need `continue-on-error: true` initially so PRs aren't blocked by noise.
+
+**Context:**
+- Harness is a standalone Node script at `evals/survey-prompt.test.mjs` (shipped in the BIG CHANGE survey PR).
+- Workflow file: `.github/workflows/evals.yml` with `on: pull_request`.
+- Should post eval summary + failure diffs as a PR comment via the `actions/github-script` action.
+
+**Depends on / blocked by:** Eval harness shipping (it does, in the survey PR).
+
+**Triggers to pick this up:**
+- A second dev joins.
+- Prompt regressions slip through despite manual runs.
+- Real users start depending on the conversational behavior.
+
+---
+
+## 4. Capture real transcripts as eval fixtures
+
+**What:** Save anonymized real user conversations under `evals/fixtures/`. Each fixture becomes a regression test — "this conversation once worked well, make sure it still does."
+
+**Why:** Synthetic eval cases test individual rules in isolation. Real conversations catch combined behaviors (probing cadence × tradeoff-sharpening × scope). The PDF feedback that drove the Big Change PR is itself an example: a real transcript exposed bugs that synthetic cases wouldn't have caught.
+
+**Pros:**
+- High-value regression coverage grown organically as users test.
+- Makes evals increasingly realistic over time — each fixture is grounded in actual user behavior.
+- Doubles as documentation of "what good conversation looks like."
+
+**Cons:**
+- Requires chat history persistence (currently NOT stored — see TODO 5).
+- Manual curation to pick representative conversations.
+- PII scrubbing required before committing fixtures to git.
+
+**Context:**
+- Would add `scripts/capture-transcript.mjs` reading from the new `chat_messages` table (TODO 5) and emitting a JSON fixture.
+- Eval harness would glob fixtures and run each as its own case.
+- PII scrub: names, addresses, specific identifiers. Consider a regex-based scrubber in the capture script.
+
+**Depends on / blocked by:** TODO 5 (chat message persistence) must land first.
+
+**Triggers to pick this up:**
+- Chat message persistence is in.
+- Multiple real users have tested and produced interesting conversation shapes.
+
+---
+
+## 5. Persist raw chat messages
+
+**What:** Add a `chat_messages` table to Supabase and save every user + LLM message (in addition to the existing extracted `<answer>` payloads). Expose the full conversation in the admin submission detail view.
+
+**Why:** Adam currently sees only the structured extractions. The actual conversation carries nuance (how the client phrased tradeoffs, what they elaborated on, where they hesitated) that the extracted fields lose. Also unlocks TODO 4 (transcript fixtures for evals).
+
+**Pros:**
+- Richer context for architects reviewing submissions — tone, hesitation, elaborations.
+- Post-hoc prompt debugging when users report odd behavior — we can see exactly what was said.
+- Groundwork for real-transcript eval fixtures (TODO 4).
+- Enables resume UX where the client can see their own prior conversation, not just their extracted answers.
+
+**Cons:**
+- New table + RLS policy (user reads own messages, admin reads all).
+- Storage grows faster — long Soul answers can be 500+ words each.
+- Modest additional save work per turn (one insert per message pair).
+- One more thing to migrate when schema evolves.
+
+**Context:**
+- Schema: `chat_messages(id UUID, submission_id UUID → submissions, role TEXT CHECK IN ('user','assistant'), content TEXT, created_at TIMESTAMPTZ)`.
+- RLS mirrors `program_answers`: users manage own, admins read all.
+- Save site: in `/api/chat` route, after extracting `<answer>` tags, insert both the user message and the assistant response.
+- Admin UI: a collapsible "Full conversation" section in `/submission/[id]`.
+- Consider retention — do we keep forever or prune after N days?
+
+**Depends on / blocked by:** Nothing; independent.
+
+**Triggers to pick this up:**
+- Adam reports wanting to see the actual conversation.
+- TODO 4 becomes desirable.
+- A behavior bug surfaces that requires conversation replay to diagnose.
+
+---
+
+## 6. Custom subdomain deployment
 
 **What:** Point `program.highlowbuffalo.co` at the Vercel deployment via Porkbun DNS + Vercel custom domain.
 
