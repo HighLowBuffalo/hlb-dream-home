@@ -20,10 +20,11 @@ export async function GET() {
     .order("updated_at", { ascending: false });
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error("GET /api/submissions error:", error.message, error.code, error.details);
+    return NextResponse.json({ error: error.message, code: error.code }, { status: 500 });
   }
 
-  return NextResponse.json(data);
+  return NextResponse.json(data || []);
 }
 
 // POST — create a new submission
