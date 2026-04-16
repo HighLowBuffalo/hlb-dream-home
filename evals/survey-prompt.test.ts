@@ -208,8 +208,9 @@ const CASES: EvalCase[] = [
       { role: "user", content: "Two adults, two kids ages 8 and 10" },
     ],
     assert: (text) => {
-      // Strip answer tags, measure conversational sentence count.
+      // Strip tags, measure conversational sentence count.
       const visible = text
+        .replace(/<current_question key="[^"]+"\s*\/?>/g, "")
         .replace(/<answer[^>]*>.*?<\/answer>/gs, "")
         .replace(/<survey_complete>.*?<\/survey_complete>/gs, "")
         .trim();
@@ -291,6 +292,7 @@ const CASES: EvalCase[] = [
       // tells us whether the model re-asked.
       const visible = lc(
         text
+          .replace(/<current_question key="[^"]+"\s*\/?>/g, "")
           .replace(/<answer[^>]*>.*?<\/answer>/gs, "")
           .replace(/<survey_complete>.*?<\/survey_complete>/gs, "")
       );

@@ -5,6 +5,7 @@ import { QUESTIONS, getQuestion } from "@/lib/data/questions";
 import Message from "./Message";
 import TypingIndicator from "./TypingIndicator";
 import FinalReview from "./FinalReview";
+import QuickReplies from "./QuickReplies";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import ProgressBar from "@/components/ui/ProgressBar";
@@ -44,12 +45,17 @@ const NON_DEFERRABLE_COUNT = QUESTIONS.filter((q) => !q.deferrable).length;
 const COMPLETION_THRESHOLD = 0.8;
 
 /**
- * Parse <answer key="...">...</answer> tags and <survey_complete> from the
- * LLM response. Returns display text (tags stripped) + extracted answers.
+ * Parse LLM tags out of a response:
+ *   <current_question key="X"/>     → which question the LLM is asking (drives chip UI)
+ *   <answer key="X">Y</answer>       → extractable facts to save
+ *   <survey_complete>true</survey_complete> → ready-to-submit signal
+ *
+ * Returns display text with all tags stripped.
  */
 function parseResponse(text: string): {
   displayText: string;
   answers: { key: string; value: string }[];
+  currentQuestionKey: string | null;
   isComplete: boolean;
 } {
   const answers: { key: string; value: string }[] = [];
@@ -59,14 +65,23 @@ function parseResponse(text: string): {
     answers.push({ key: match[1], value: match[2].trim() });
   }
 
+  const currentQuestionMatch = text.match(
+    /<current_question key="([^"]+)"\s*\/?>/
+  );
+  const currentQuestionKey =
+    currentQuestionMatch && currentQuestionMatch[1] !== "none"
+      ? currentQuestionMatch[1]
+      : null;
+
   const isComplete = text.includes("<survey_complete>true</survey_complete>");
 
   const displayText = text
+    .replace(/<current_question key="[^"]+"\s*\/?>/g, "")
     .replace(/<answer key="[^"]+">([^<]*)<\/answer>/g, "")
     .replace(/<survey_complete>true<\/survey_complete>/g, "")
     .trim();
 
-  return { displayText, answers, isComplete };
+  return { displayText, answers, currentQuestionKey, isComplete };
 }
 
 export default function ChatInterface({
@@ -87,8 +102,12 @@ export default function ChatInterface({
     new Set(Object.keys(initialAnswers))
   );
   const [llmSignaledComplete, setLlmSignaledComplete] = useState(false);
+  const [currentQuestionKey, setCurrentQuestionKey] = useState<string | null>(
+    null
+  );
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
   const initRef = useRef(false);
 
   // Count only non-deferrable questions toward progress to keep the meter honest.
@@ -125,7 +144,10 @@ export default function ChatInterface({
         if (!res.ok) throw new Error("Chat API failed");
 
         const data = await res.json();
-        const { displayText, answers, isComplete } = parseResponse(data.text);
+        const { displayText, answers, currentQuestionKey: nextKey, isComplete } =
+          parseResponse(data.text);
+
+        setCurrentQuestionKey(nextKey);
 
         // Save extracted answers (parent routes to correct DB table via catalog).
         for (const { key, value } of answers) {
@@ -253,6 +275,45 @@ export default function ChatInterface({
     sendToApi(newApiMessages);
   }
 
+  // Look up the catalog entry for the question the LLM is currently asking.
+  // Drives chip rendering + input placeholder hint.
+  const currentQuestion = currentQuestionKey
+    ? getQuestion(currentQuestionKey)
+    : null;
+  const showChips =
+    !!currentQuestion &&
+    (currentQuestion.type === "chips_single" ||
+      currentQuestion.type === "chips_multi") &&
+    (currentQuestion.quickReplies?.length ?? 0) > 0 &&
+    !isTyping;
+
+  // Parse the current input as a comma-separated list for chips_multi so
+  // chip toggling is additive / subtractive with what's already typed.
+  function currentSelections(): string[] {
+    return inputValue
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+
+  function handleChipClick(chipValue: string) {
+    if (!currentQuestion) return;
+
+    if (currentQuestion.type === "chips_single") {
+      // One tap sends — fastest UX for mutually-exclusive options.
+      setInputValue(chipValue);
+      // Submit on next tick so React flushes the state first.
+      setTimeout(() => formRef.current?.requestSubmit(), 0);
+    } else if (currentQuestion.type === "chips_multi") {
+      // Toggle in the current selection; user hits Send when done.
+      const selected = currentSelections();
+      const idx = selected.indexOf(chipValue);
+      if (idx >= 0) selected.splice(idx, 1);
+      else selected.push(chipValue);
+      setInputValue(selected.join(", "));
+    }
+  }
+
   return (
     <div className="flex flex-col h-full">
       {/* Header — leaves pr-28 on the right so the fixed SIGN OUT pill
@@ -314,9 +375,26 @@ export default function ChatInterface({
         )}
       </div>
 
-      {/* Input — pinned to bottom */}
+      {/* Chip bar + input — pinned to bottom */}
       <div className="border-t border-gray-200 bg-white">
+        {showChips && (
+          <div className="px-6 pt-4 max-w-2xl mx-auto">
+            <QuickReplies
+              options={currentQuestion!.quickReplies!}
+              selected={
+                currentQuestion!.type === "chips_multi"
+                  ? currentSelections()
+                  : inputValue
+                  ? [inputValue]
+                  : []
+              }
+              multi={currentQuestion!.type === "chips_multi"}
+              onSelect={handleChipClick}
+            />
+          </div>
+        )}
         <form
+          ref={formRef}
           onSubmit={handleSubmit}
           className="flex items-end gap-4 px-6 py-4 max-w-2xl mx-auto"
         >
@@ -326,7 +404,9 @@ export default function ChatInterface({
               type="text"
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
-              placeholder="Type your answer..."
+              placeholder={
+                currentQuestion?.placeholder || "Type your answer..."
+              }
               disabled={isTyping}
               autoFocus
             />

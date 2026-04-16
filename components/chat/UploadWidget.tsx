@@ -23,20 +23,21 @@ export default function UploadWidget({
   const [files, setFiles] = useState<UploadedFile[]>([]);
 
   async function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const selected = Array.from(e.target.files || []);
-    if (!submissionId || selected.length === 0) return;
+    // Single-file mode: take only the first selection. The OS picker
+    // also enforces this via the absence of the `multiple` attribute on
+    // the input, but we guard the array too in case of edge cases.
+    const file = e.target.files?.[0];
+    if (!submissionId || !file) return;
 
-    for (const file of selected) {
-      setFiles((prev) => [...prev, { name: file.name, status: "uploading" }]);
-      const result = await uploadImage(file, submissionId, contextKey);
-      setFiles((prev) =>
-        prev.map((f) =>
-          f.name === file.name
-            ? { ...f, status: result.ok ? "done" : "error" }
-            : f
-        )
-      );
-    }
+    setFiles((prev) => [...prev, { name: file.name, status: "uploading" }]);
+    const result = await uploadImage(file, submissionId, contextKey);
+    setFiles((prev) =>
+      prev.map((f) =>
+        f.name === file.name
+          ? { ...f, status: result.ok ? "done" : "error" }
+          : f
+      )
+    );
 
     // Reset input so same file can be selected again
     if (inputRef.current) inputRef.current.value = "";
@@ -69,7 +70,6 @@ export default function UploadWidget({
         ref={inputRef}
         type="file"
         accept="image/*"
-        multiple
         onChange={handleChange}
         className="hidden"
       />

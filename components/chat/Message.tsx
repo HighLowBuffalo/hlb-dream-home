@@ -23,14 +23,18 @@ export default function Message({
   submissionId,
 }: MessageProps) {
   const isHlb = sender === "hlb";
-  const hasExtractions = !isHlb && extractedKeys && extractedKeys.length > 0;
 
-  // Uploadable keys are the subset of extractedKeys whose catalog entry has
-  // uploadable: true — the UI shows an "Add image" button scoped to that
-  // question_key so the upload lands at submissions/<id>/<key>/...
-  const uploadableKeys = hasExtractions
-    ? extractedKeys!.filter((k) => getQuestion(k)?.uploadable)
-    : [];
+  // Filter to catalog-known keys only. Secondary extractions (e.g.
+  // officeLocation, inLawSuiteLocation) are override metadata that
+  // don't have their own catalog entries — flagging or uploading
+  // against them has no UI meaning and produces duplicate icon rows.
+  const catalogKeys = (extractedKeys || []).filter(
+    (k) => getQuestion(k) !== undefined
+  );
+  const primaryKey = catalogKeys[0];
+  const uploadableKey = catalogKeys.find(
+    (k) => getQuestion(k)?.uploadable === true
+  );
 
   return (
     <div className={`flex flex-col ${isHlb ? "items-start" : "items-end"} mb-4`}>
@@ -42,27 +46,23 @@ export default function Message({
         {text}
       </div>
 
-      {hasExtractions && (
-        <div className="mt-1 max-w-[80%] flex flex-col items-end gap-1">
-          {extractedKeys!.map((key) => {
-            const q = getQuestion(key);
-            const label = q?.label || q?.text?.slice(0, 40) || key;
-            return (
-              <div key={key} className="flex items-center gap-2">
-                <QuestionFlags
-                  activeFlags={flags?.[key] || new Set()}
-                  onToggle={(flag) => onToggleFlag?.(key, flag)}
-                />
-                {uploadableKeys.includes(key) && submissionId && (
-                  <UploadWidget
-                    contextKey={key}
-                    contextLabel={label}
-                    submissionId={submissionId}
-                  />
-                )}
-              </div>
-            );
-          })}
+      {!isHlb && primaryKey && (
+        <div className="mt-1 max-w-[80%] flex items-center justify-end gap-2">
+          <QuestionFlags
+            activeFlags={flags?.[primaryKey] || new Set()}
+            onToggle={(flag) => onToggleFlag?.(primaryKey, flag)}
+          />
+          {uploadableKey && submissionId && (
+            <UploadWidget
+              contextKey={uploadableKey}
+              contextLabel={
+                getQuestion(uploadableKey)?.label ||
+                getQuestion(uploadableKey)?.text?.slice(0, 40) ||
+                uploadableKey
+              }
+              submissionId={submissionId}
+            />
+          )}
         </div>
       )}
     </div>
