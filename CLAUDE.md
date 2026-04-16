@@ -147,8 +147,8 @@ Wire Claude API so the model powers the conversational flow. The model should re
 
 ## Development Guidelines
 
-- **Do not use browser preview or localhost screenshots.** Tim will verify UI manually.
-- **One feature at a time.** Work on a single feature or fix, get it working, commit, then move to the next.
+- **Test before deploying.** Use the local dev server (port 3003) with browser preview tools to verify features work before committing. Also use direct API calls (curl / fetch) to test backend routes. Do not deploy untested code.
+- **One feature at a time.** Work on a single feature or fix, test it, commit, then move to the next.
 - **Commit frequently to GitHub.** Every meaningful change committed and pushed.
 - **Port assignment:** Use port 3003 for local dev (`next dev -p 3003`).
 - **Environment variables:** Supabase URL, Supabase anon key, and Anthropic API key in `.env.local` and Vercel settings. Never expose API keys in client-side code.
