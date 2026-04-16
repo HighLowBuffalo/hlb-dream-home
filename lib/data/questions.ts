@@ -14,6 +14,7 @@ export interface Question {
   placeholder?: string;
   min?: number;
   max?: number;
+  step?: number;
 }
 
 export const PROGRAM_QUESTIONS: Question[] = [
@@ -53,10 +54,11 @@ export const PROGRAM_QUESTIONS: Question[] = [
   },
   {
     key: "baths",
-    text: "How many bathrooms total?",
+    text: "How many bathrooms total? Count powder rooms as half baths.",
     type: "stepper",
-    min: 1,
+    min: 0.5,
     max: 10,
+    step: 0.5,
   },
   {
     key: "guests",
