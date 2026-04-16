@@ -17,7 +17,7 @@ export async function GET(request: Request) {
       } = await supabase.auth.getUser();
 
       if (user) {
-        const profile = await ensureProfile(supabase, user);
+        const profile = await ensureProfile(user);
         if (!profile.ok) {
           return NextResponse.redirect(`${origin}/login?error=profile`);
         }

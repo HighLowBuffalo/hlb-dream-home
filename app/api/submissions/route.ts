@@ -38,7 +38,7 @@ export async function POST(request: Request) {
   }
 
   // Safety net: ensure profile exists before creating submission
-  const profile = await ensureProfile(supabase, user);
+  const profile = await ensureProfile(user);
   if (!profile.ok) {
     return NextResponse.json(
       { error: "Could not create user profile" },

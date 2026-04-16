@@ -33,17 +33,9 @@ function VerifyContent() {
       } = await supabase.auth.getUser();
 
       if (user) {
-        // Ensure profile exists
-        const { error: profileError } = await supabase.from("profiles").upsert(
-          {
-            id: user.id,
-            email: user.email!,
-            last_login: new Date().toISOString(),
-          },
-          { onConflict: "id" }
-        );
-
-        if (profileError) {
+        // Ensure profile exists via server-side API (uses admin client)
+        const profileRes = await fetch("/api/profile", { method: "POST" });
+        if (!profileRes.ok) {
           setError("Could not set up your profile. Please try again.");
           return;
         }
