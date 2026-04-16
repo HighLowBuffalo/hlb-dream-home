@@ -11,5 +11,7 @@ export const config = {
     "/survey/:path*",
     "/report/:path*",
     "/admin/:path*",
+    "/dashboard/:path*",
+    "/submission/:path*",
   ],
 };
