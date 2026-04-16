@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { uploadImage } from "@/lib/upload";
 
 interface UploadWidgetProps {
   contextKey: string;
@@ -27,32 +28,14 @@ export default function UploadWidget({
 
     for (const file of selected) {
       setFiles((prev) => [...prev, { name: file.name, status: "uploading" }]);
-
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("submissionId", submissionId);
-      formData.append("contextKey", contextKey);
-
-      try {
-        const res = await fetch("/api/images", {
-          method: "POST",
-          body: formData,
-        });
-
-        setFiles((prev) =>
-          prev.map((f) =>
-            f.name === file.name
-              ? { ...f, status: res.ok ? "done" : "error" }
-              : f
-          )
-        );
-      } catch {
-        setFiles((prev) =>
-          prev.map((f) =>
-            f.name === file.name ? { ...f, status: "error" } : f
-          )
-        );
-      }
+      const result = await uploadImage(file, submissionId, contextKey);
+      setFiles((prev) =>
+        prev.map((f) =>
+          f.name === file.name
+            ? { ...f, status: result.ok ? "done" : "error" }
+            : f
+        )
+      );
     }
 
     // Reset input so same file can be selected again

@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
+/**
+ * Record metadata for an image that the browser has already uploaded
+ * directly to Supabase Storage. The file itself is NOT sent through
+ * this route — direct-to-Storage uploads bypass Vercel's 4.5 MB
+ * serverless body limit.
+ */
 export async function POST(request: Request) {
   const supabase = await createClient();
   const {
@@ -11,19 +17,32 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const formData = await request.formData();
-  const file = formData.get("file") as File | null;
-  const submissionId = formData.get("submissionId") as string | null;
-  const contextKey = formData.get("contextKey") as string | null;
+  const body = await request.json();
+  const { submissionId, contextKey, storagePath, fileName, fileSize } = body as {
+    submissionId?: string;
+    contextKey?: string;
+    storagePath?: string;
+    fileName?: string;
+    fileSize?: number;
+  };
 
-  if (!file || !submissionId || !contextKey) {
+  if (!submissionId || !contextKey || !storagePath || !fileName) {
     return NextResponse.json(
-      { error: "file, submissionId, and contextKey are required" },
+      { error: "submissionId, contextKey, storagePath, and fileName are required" },
       { status: 400 }
     );
   }
 
-  // Verify user owns submission
+  // Defensive: ensure the recorded path matches the enforced pattern so
+  // a user can't attach someone else's file to their own submission row.
+  const expectedPrefix = `submissions/${submissionId}/${contextKey}/`;
+  if (!storagePath.startsWith(expectedPrefix)) {
+    return NextResponse.json(
+      { error: "storagePath does not match submissionId/contextKey" },
+      { status: 400 }
+    );
+  }
+
   const { data: submission } = await supabase
     .from("submissions")
     .select("id")
@@ -35,17 +54,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Submission not found" }, { status: 404 });
   }
 
-  const storagePath = `submissions/${submissionId}/${contextKey}/${file.name}`;
-
-  const { error: uploadError } = await supabase.storage
-    .from("uploads")
-    .upload(storagePath, file, { upsert: true });
-
-  if (uploadError) {
-    return NextResponse.json({ error: uploadError.message }, { status: 500 });
-  }
-
-  // Record in database
   const { data, error } = await supabase
     .from("uploaded_images")
     .insert({
@@ -53,8 +61,8 @@ export async function POST(request: Request) {
       context_key: contextKey,
       context_label: contextKey,
       storage_path: storagePath,
-      file_name: file.name,
-      file_size: file.size,
+      file_name: fileName,
+      file_size: fileSize ?? null,
     })
     .select()
     .single();
