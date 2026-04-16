@@ -118,15 +118,27 @@ export async function DELETE(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { error } = await supabase
+  // .select() on a DELETE returns the deleted rows. If RLS filters the
+  // row out (e.g. missing DELETE policy) Postgres doesn't raise an error
+  // — it just affects 0 rows. Without this check we'd return {ok:true}
+  // on a silent failure, which is exactly how the "Start over" button
+  // was previously lying to clients.
+  const { data: deleted, error } = await supabase
     .from("submissions")
     .delete()
     .eq("id", id)
-    .eq("user_id", user.id);
+    .eq("user_id", user.id)
+    .select("id");
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+  if (!deleted || deleted.length === 0) {
+    return NextResponse.json(
+      { error: "Submission not found or not deletable by this user" },
+      { status: 404 }
+    );
+  }
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, deleted: deleted.length });
 }

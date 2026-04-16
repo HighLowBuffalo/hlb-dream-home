@@ -322,6 +322,39 @@ const CASES: EvalCase[] = [
       return null;
     },
   },
+
+  {
+    // Regression guard: the <current_question> turn-marking tag once
+    // eclipsed the <answer> extraction tag in the model's attention,
+    // causing answers to silently drop (progress bar stuck at 0/N).
+    // This case asserts both tags coexist in a well-formed response.
+    name: "7. Emits <answer> tag when the client just gave a saveable fact",
+    history: [
+      {
+        role: "user",
+        content: "I'm ready to start the home programming questionnaire.",
+      },
+      {
+        role: "assistant",
+        content:
+          "<current_question key=\"name\"/>Hi. What's your name?",
+      },
+      { role: "user", content: "Tim" },
+    ],
+    assert: (text) => {
+      const hasAnswerTag = /<answer key="name">[^<]+<\/answer>/i.test(text);
+      const hasCurrentQuestion = /<current_question key="[^"]+"\s*\/?>/i.test(
+        text
+      );
+      if (!hasAnswerTag) {
+        return `Missing <answer key="name"> tag; name would be lost. Response: "${text.slice(0, 250)}"`;
+      }
+      if (!hasCurrentQuestion) {
+        return `Missing <current_question> tag; chip UI would break. Response: "${text.slice(0, 250)}"`;
+      }
+      return null;
+    },
+  },
 ];
 
 // --- Runner ---
