@@ -41,11 +41,28 @@ export async function GET(
     );
   }
 
+  const imageRows = images.data || [];
+  let signedImages: Array<Record<string, unknown>> = imageRows;
+  if (imageRows.length > 0) {
+    const paths = imageRows.map((r) => r.storage_path);
+    const { data: signed } = await supabase.storage
+      .from("uploads")
+      .createSignedUrls(paths, 60 * 60); // 1 hour
+    const urlByPath = new Map<string, string>();
+    for (const s of signed || []) {
+      if (s.path && s.signedUrl) urlByPath.set(s.path, s.signedUrl);
+    }
+    signedImages = imageRows.map((r) => ({
+      ...r,
+      signed_url: urlByPath.get(r.storage_path) || null,
+    }));
+  }
+
   return NextResponse.json({
     ...submission.data,
     programAnswers: programAnswers.data || [],
     soulAnswers: soulAnswers.data || [],
-    images: images.data || [],
+    images: signedImages,
     flags: flags.data || [],
   });
 }

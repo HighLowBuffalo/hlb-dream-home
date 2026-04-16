@@ -7,6 +7,7 @@ import { SOUL_QUESTIONS } from "@/lib/data/soulQuestions";
 import { SPACE_DEFAULTS } from "@/lib/data/spaceDefaults";
 import Button from "@/components/ui/Button";
 import QuestionFlags, { type FlagType } from "@/components/ui/QuestionFlags";
+import UploadedImages from "@/components/ui/UploadedImages";
 
 interface Answer {
   question_key: string;
@@ -17,6 +18,14 @@ interface Answer {
 interface Flag {
   question_key: string;
   flag_type: FlagType;
+}
+
+interface Image {
+  id: string;
+  context_key: string;
+  storage_path: string;
+  file_name: string | null;
+  signed_url: string | null;
 }
 
 interface Submission {
@@ -31,6 +40,7 @@ interface Submission {
   programAnswers: Answer[];
   soulAnswers: Answer[];
   flags?: Flag[];
+  images?: Image[];
 }
 
 // Map program answer keys to space defaults for the space program table
@@ -247,6 +257,8 @@ export default function ReportPage() {
     flagMap[f.question_key].add(f.flag_type);
   }
 
+  const images = submission.images || [];
+
   const questionTextMap: Record<string, string> = {};
   for (const q of PROGRAM_QUESTIONS) {
     questionTextMap[q.key] = q.text;
@@ -363,6 +375,7 @@ export default function ReportPage() {
                         )}
                       </div>
                       <p className="text-sm font-light leading-relaxed">{answer}</p>
+                      <UploadedImages images={images} contextKey={key} />
                     </div>
                   ))}
                 </div>
@@ -378,7 +391,7 @@ export default function ReportPage() {
               The Soul of Your Home
             </h2>
             <div className="space-y-6">
-              {SOUL_QUESTIONS.filter((q) => soulMap[q.key]).map((q) => (
+              {SOUL_QUESTIONS.filter((q) => soulMap[q.key] || images.some((img) => img.context_key === q.key)).map((q) => (
                 <div key={q.key}>
                   <div className="flex items-start justify-between gap-3">
                     <p className="text-xs text-gray-400 mb-1 flex-1">{q.label}</p>
@@ -386,9 +399,12 @@ export default function ReportPage() {
                       <QuestionFlags activeFlags={flagMap[q.key]} readOnly />
                     )}
                   </div>
-                  <p className="text-sm font-light leading-relaxed whitespace-pre-wrap">
-                    {soulMap[q.key]}
-                  </p>
+                  {soulMap[q.key] && (
+                    <p className="text-sm font-light leading-relaxed whitespace-pre-wrap">
+                      {soulMap[q.key]}
+                    </p>
+                  )}
+                  <UploadedImages images={images} contextKey={q.key} />
                 </div>
               ))}
             </div>
