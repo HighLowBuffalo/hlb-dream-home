@@ -64,9 +64,15 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ text });
   } catch (err) {
-    console.error("Chat API error:", err);
+    // Propagate the underlying detail. Silent "Failed to generate response"
+    // hides config gaps (missing API key on Vercel, invalid model ID, rate
+    // limits). The client-facing fallback is still generic, but DevTools /
+    // server logs now show the real cause.
+    const detail =
+      err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+    console.error("Chat API error:", detail);
     return NextResponse.json(
-      { error: "Failed to generate response" },
+      { error: "Failed to generate response", detail },
       { status: 500 }
     );
   }
