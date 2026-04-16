@@ -1,11 +1,9 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { PROGRAM_QUESTIONS, Question } from "@/lib/data/questions";
+import { PROGRAM_QUESTIONS } from "@/lib/data/questions";
 import Message from "./Message";
-import QuickReplies from "./QuickReplies";
 import TypingIndicator from "./TypingIndicator";
-import UploadWidget from "./UploadWidget";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import ProgressBar from "@/components/ui/ProgressBar";
@@ -19,6 +17,11 @@ interface ChatMessage {
   text: string;
 }
 
+interface ApiMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
 interface ChatInterfaceProps {
   answers?: Record<string, string>;
   onAnswer?: (key: string, value: string) => void;
@@ -27,27 +30,51 @@ interface ChatInterfaceProps {
   submissionId?: string | null;
 }
 
+/**
+ * Parse <answer key="...">...</answer> tags from Claude's response.
+ * Returns the display text (tags stripped) and extracted answers.
+ */
+function parseResponse(text: string): {
+  displayText: string;
+  answers: { key: string; value: string }[];
+  isComplete: boolean;
+} {
+  const answers: { key: string; value: string }[] = [];
+  const answerRegex = /<answer key="([^"]+)">([^<]*)<\/answer>/g;
+  let match;
+  while ((match = answerRegex.exec(text)) !== null) {
+    answers.push({ key: match[1], value: match[2].trim() });
+  }
+
+  const isComplete = text.includes("<survey_complete>true</survey_complete>");
+
+  // Strip tags from display text
+  const displayText = text
+    .replace(/<answer key="[^"]+">([^<]*)<\/answer>/g, "")
+    .replace(/<survey_complete>true<\/survey_complete>/g, "")
+    .trim();
+
+  return { displayText, answers, isComplete };
+}
+
 export default function ChatInterface({
   answers: initialAnswers = {},
   onAnswer,
   onComplete,
   saveStatus = "idle",
-  submissionId,
 }: ChatInterfaceProps) {
-  const [currentIndex, setCurrentIndex] = useState(0);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [apiMessages, setApiMessages] = useState<ApiMessage[]>([]);
   const [inputValue, setInputValue] = useState("");
-  const [selectedChips, setSelectedChips] = useState<string[]>([]);
-  const [showOtherInput, setShowOtherInput] = useState(false);
-  const [otherValue, setOtherValue] = useState("");
-  const [stepperValue, setStepperValue] = useState(3);
   const [isTyping, setIsTyping] = useState(false);
-  const [answers, setAnswers] = useState<Record<string, string>>(initialAnswers);
+  const [answeredKeys, setAnsweredKeys] = useState<Set<string>>(
+    new Set(Object.keys(initialAnswers))
+  );
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const initRef = useRef(false);
 
-  const question = PROGRAM_QUESTIONS[currentIndex] as Question | undefined;
-  const answeredCount = Object.keys(answers).length;
+  const answeredCount = answeredKeys.size;
 
   // Scroll to bottom on new messages
   useEffect(() => {
@@ -57,191 +84,137 @@ export default function ChatInterface({
     });
   }, [messages, isTyping]);
 
-  // Show first question
-  useEffect(() => {
-    if (messages.length === 0 && question) {
-      showQuestion(question);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // Send message to Claude API
+  const sendToApi = useCallback(
+    async (newApiMessages: ApiMessage[]) => {
+      setIsTyping(true);
+      try {
+        const res = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ messages: newApiMessages }),
+        });
 
-  // Resume from saved answers
-  useEffect(() => {
-    if (Object.keys(initialAnswers).length > 0) {
-      let resumeIndex = 0;
-      for (let i = 0; i < PROGRAM_QUESTIONS.length; i++) {
-        if (initialAnswers[PROGRAM_QUESTIONS[i].key]) {
-          resumeIndex = i + 1;
-        } else {
-          break;
+        if (!res.ok) {
+          throw new Error("Chat API failed");
         }
-      }
-      if (resumeIndex > 0 && resumeIndex < PROGRAM_QUESTIONS.length) {
-        setCurrentIndex(resumeIndex);
-        setMessages([
+
+        const data = await res.json();
+        const { displayText, answers, isComplete } = parseResponse(data.text);
+
+        // Save extracted answers
+        for (const { key, value } of answers) {
+          onAnswer?.(key, value);
+          setAnsweredKeys((prev) => new Set([...prev, key]));
+        }
+
+        // Add assistant message
+        const assistantMsg: ChatMessage = {
+          id: `hlb-${Date.now()}`,
+          sender: "hlb",
+          text: displayText,
+        };
+        setMessages((prev) => [...prev, assistantMsg]);
+
+        // Update API message history with the raw response (including tags)
+        setApiMessages((prev) => [
+          ...prev,
+          { role: "assistant" as const, content: data.text },
+        ]);
+
+        if (isComplete) {
+          setTimeout(() => onComplete?.(), 1500);
+        }
+
+        inputRef.current?.focus();
+      } catch {
+        setMessages((prev) => [
+          ...prev,
           {
-            id: "resume",
+            id: `error-${Date.now()}`,
             sender: "hlb",
-            text: "Welcome back. Let\u2019s pick up where you left off.",
-          },
-          {
-            id: `q-${resumeIndex}`,
-            sender: "hlb",
-            text: PROGRAM_QUESTIONS[resumeIndex].text,
+            text: "Sorry, I had trouble processing that. Could you try again?",
           },
         ]);
+      } finally {
+        setIsTyping(false);
       }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  function showQuestion(q: Question) {
-    setIsTyping(true);
-    setShowOtherInput(false);
-    setOtherValue("");
-    setTimeout(() => {
-      setIsTyping(false);
-      setMessages((prev) => [
-        ...prev,
-        { id: `q-${q.key}`, sender: "hlb", text: q.text },
-      ]);
-      if (q.type === "stepper") {
-        setStepperValue(q.min ?? 1);
-      }
-      inputRef.current?.focus();
-    }, 600);
-  }
-
-  const saveAnswer = useCallback(
-    (key: string, value: string) => {
-      setAnswers((prev) => ({ ...prev, [key]: value }));
-      onAnswer?.(key, value);
     },
-    [onAnswer]
+    [onAnswer, onComplete]
   );
 
-  function advance(value: string) {
-    if (!question) return;
+  // Start conversation
+  useEffect(() => {
+    if (initRef.current) return;
+    initRef.current = true;
 
-    // Add user message
-    if (value.trim()) {
-      setMessages((prev) => [
-        ...prev,
-        { id: `a-${question.key}`, sender: "user", text: value },
+    const resumeAnswers = Object.keys(initialAnswers);
+    let startMessage: ApiMessage;
+
+    if (resumeAnswers.length > 0) {
+      // Resuming — tell Claude what we already know
+      const summary = resumeAnswers
+        .map((key) => {
+          const q = PROGRAM_QUESTIONS.find((pq) => pq.key === key);
+          return `${q?.text || key}: ${initialAnswers[key]}`;
+        })
+        .join("\n");
+
+      startMessage = {
+        role: "user",
+        content: `I'm returning to continue the questionnaire. Here's what I've already answered:\n\n${summary}\n\nLet's pick up where we left off.`,
+      };
+
+      setMessages([
+        {
+          id: "resume-user",
+          sender: "user",
+          text: "I'd like to pick up where I left off.",
+        },
       ]);
-      saveAnswer(question.key, value);
+    } else {
+      startMessage = {
+        role: "user",
+        content:
+          "Hi, I'm ready to start the home programming questionnaire.",
+      };
+
+      setMessages([
+        {
+          id: "start-user",
+          sender: "user",
+          text: "I'm ready to get started.",
+        },
+      ]);
     }
 
-    // Reset input state
+    const newApiMessages = [startMessage];
+    setApiMessages(newApiMessages);
+    sendToApi(newApiMessages);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!inputValue.trim() || isTyping) return;
+
+    const userText = inputValue.trim();
     setInputValue("");
-    setSelectedChips([]);
-    setShowOtherInput(false);
-    setOtherValue("");
 
-    // Advance
-    const nextIndex = currentIndex + 1;
-    if (nextIndex >= PROGRAM_QUESTIONS.length) {
-      setIsTyping(true);
-      setTimeout(() => {
-        setIsTyping(false);
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: "done",
-            sender: "hlb",
-            text: "That covers the practical side. Now let\u2019s talk about the soul of your home \u2014 the feelings and experiences that matter most to you.",
-          },
-        ]);
-        onComplete?.();
-      }, 800);
-      return;
-    }
-
-    setCurrentIndex(nextIndex);
-    showQuestion(PROGRAM_QUESTIONS[nextIndex]);
-  }
-
-  function submitAnswer(value: string) {
-    if (!question || !value.trim()) return;
-    advance(value);
-  }
-
-  function handleSkip() {
-    if (!question) return;
-    // Add skip message
+    // Add user message to UI
     setMessages((prev) => [
       ...prev,
-      { id: `a-${question.key}`, sender: "user", text: "Skipped" },
+      { id: `user-${Date.now()}`, sender: "user", text: userText },
     ]);
-    // Don't save, just advance
-    setInputValue("");
-    setSelectedChips([]);
-    setShowOtherInput(false);
-    setOtherValue("");
 
-    const nextIndex = currentIndex + 1;
-    if (nextIndex >= PROGRAM_QUESTIONS.length) {
-      setIsTyping(true);
-      setTimeout(() => {
-        setIsTyping(false);
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: "done",
-            sender: "hlb",
-            text: "That covers the practical side. Now let\u2019s talk about the soul of your home \u2014 the feelings and experiences that matter most to you.",
-          },
-        ]);
-        onComplete?.();
-      }, 800);
-      return;
-    }
-
-    setCurrentIndex(nextIndex);
-    showQuestion(PROGRAM_QUESTIONS[nextIndex]);
+    // Add to API messages and send
+    const newApiMessages = [
+      ...apiMessages,
+      { role: "user" as const, content: userText },
+    ];
+    setApiMessages(newApiMessages);
+    sendToApi(newApiMessages);
   }
-
-  function handleTextSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    submitAnswer(inputValue);
-  }
-
-  function handleChipSelect(value: string) {
-    if (value === "__other__") {
-      setShowOtherInput(true);
-      return;
-    }
-    if (question?.type === "chips_single") {
-      submitAnswer(value);
-    } else {
-      setSelectedChips((prev) =>
-        prev.includes(value)
-          ? prev.filter((v) => v !== value)
-          : [...prev, value]
-      );
-    }
-  }
-
-  function handleChipsConfirm() {
-    const parts = [...selectedChips];
-    if (otherValue.trim()) parts.push(otherValue.trim());
-    if (parts.length > 0) {
-      submitAnswer(parts.join(", "));
-    }
-  }
-
-  function handleOtherSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (question?.type === "chips_single" && otherValue.trim()) {
-      submitAnswer(otherValue.trim());
-    }
-  }
-
-  function handleStepperSubmit() {
-    submitAnswer(String(stepperValue));
-  }
-
-  const step = question?.step ?? 1;
 
   return (
     <div className="flex flex-col h-full">
@@ -263,140 +236,28 @@ export default function ChatInterface({
           <Message key={msg.id} sender={msg.sender} text={msg.text} />
         ))}
         {isTyping && <TypingIndicator />}
-
-        {/* Quick replies / chips */}
-        {!isTyping && question?.quickReplies && (
-          <div className="mb-4">
-            <QuickReplies
-              options={
-                question.quickReplies.some(r => r.toLowerCase() === "other")
-                  ? question.quickReplies
-                  : [...question.quickReplies, "Other"]
-              }
-              selected={selectedChips}
-              multi={question.type === "chips_multi"}
-              onSelect={(v) =>
-                handleChipSelect(v.toLowerCase() === "other" ? "__other__" : v)
-              }
-            />
-            {showOtherInput && (
-              <form onSubmit={handleOtherSubmit} className="mt-3 flex gap-3">
-                <Input
-                  value={otherValue}
-                  onChange={(e) => setOtherValue(e.target.value)}
-                  placeholder="Tell us..."
-                  autoFocus
-                />
-                {question.type === "chips_single" && (
-                  <Button type="submit" disabled={!otherValue.trim()}>
-                    Send
-                  </Button>
-                )}
-              </form>
-            )}
-            {question.type === "chips_multi" &&
-              (selectedChips.length > 0 || otherValue.trim()) && (
-                <div className="mt-3">
-                  <Button onClick={handleChipsConfirm}>
-                    Continue &rarr;
-                  </Button>
-                </div>
-              )}
-          </div>
-        )}
-
-        {/* Stepper */}
-        {!isTyping && question?.type === "stepper" && (
-          <div className="flex items-center gap-6 mb-4">
-            <button
-              type="button"
-              onClick={() =>
-                setStepperValue((v) =>
-                  Math.max(question.min ?? 0, v - step)
-                )
-              }
-              className="w-10 h-10 border border-gray-200 text-lg font-light hover:border-black transition-colors"
-            >
-              &minus;
-            </button>
-            <span className="text-2xl font-light w-12 text-center">
-              {stepperValue % 1 === 0 ? stepperValue : stepperValue.toFixed(1)}
-            </span>
-            <button
-              type="button"
-              onClick={() =>
-                setStepperValue((v) =>
-                  Math.min(question.max ?? 99, v + step)
-                )
-              }
-              className="w-10 h-10 border border-gray-200 text-lg font-light hover:border-black transition-colors"
-            >
-              +
-            </button>
-            <Button onClick={handleStepperSubmit}>Continue &rarr;</Button>
-          </div>
-        )}
-
-        {/* Upload widget */}
-        {!isTyping && question?.uploadContext && (
-          <UploadWidget
-            contextKey={question.uploadContext}
-            contextLabel="reference images"
-            submissionId={submissionId || undefined}
-          />
-        )}
       </div>
 
-      {/* Text input + skip */}
-      {!isTyping &&
-        question &&
-        (question.type === "text" || question.type === "number") && (
-          <div className="border-t border-gray-200">
-            <form
-              onSubmit={handleTextSubmit}
-              className="flex items-end gap-4 px-6 py-4"
-            >
-              <div className="flex-1">
-                <Input
-                  ref={inputRef}
-                  type={question.type === "number" ? "number" : "text"}
-                  value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
-                  placeholder={question.placeholder || "Type your answer..."}
-                  autoFocus
-                />
-              </div>
-              <Button type="submit" disabled={!inputValue.trim()}>
-                Send
-              </Button>
-            </form>
-            <div className="px-6 pb-3">
-              <button
-                type="button"
-                onClick={handleSkip}
-                className="text-[10px] font-medium tracking-[0.12em] uppercase text-gray-400 hover:text-black transition-colors"
-              >
-                Skip this question
-              </button>
-            </div>
-          </div>
-        )}
-
-      {/* Skip for stepper/chips questions */}
-      {!isTyping &&
-        question &&
-        question.type !== "text" &&
-        question.type !== "number" && (
-          <div className="px-6 py-3 border-t border-gray-200">
-            <button
-              type="button"
-              onClick={handleSkip}
-              className="text-[10px] font-medium tracking-[0.12em] uppercase text-gray-400 hover:text-black transition-colors"
-            >
-              Skip this question
-            </button>
-          </div>
-        )}
+      {/* Input */}
+      <form
+        onSubmit={handleSubmit}
+        className="flex items-end gap-4 px-6 py-4 border-t border-gray-200"
+      >
+        <div className="flex-1">
+          <Input
+            ref={inputRef}
+            type="text"
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            placeholder="Type your answer..."
+            disabled={isTyping}
+            autoFocus
+          />
+        </div>
+        <Button type="submit" disabled={!inputValue.trim() || isTyping}>
+          Send
+        </Button>
+      </form>
     </div>
   );
 }
