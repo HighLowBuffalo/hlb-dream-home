@@ -140,10 +140,11 @@ Wire Claude API so the model powers the conversational flow. The model should re
 
 ### 4. Future Backlog (Do Not Build Yet)
 
-- Voice input with transcription
+- **Voice survey mode:** Let users complete the survey by speaking into a mic instead of typing. Use Web Speech API or Whisper for transcription, stream audio to text, feed into the same Claude conversation flow. Requires mic permission UI, real-time transcription display, and fallback to text input.
+- **Style photo picker:** Present users with a curated grid of pre-selected interior and exterior photos representing different architectural styles (modern, craftsman, farmhouse, industrial, etc.). Users select photos they're drawn to and optionally explain why. Answers feed into the programming analysis. Requires: photo curation, Supabase Storage for images, a new survey section between Program and Soul.
+- **Mood board / Pinterest import:** Allow users to paste a Pinterest board URL or upload screenshots from mood boards. Parse or display the linked content alongside their survey responses. Visible in both client review and admin dashboard.
 - Spouse/partner mode (two people, same project, results compared)
 - AI-generated mood images
-- Pinterest board import
 
 ## Development Guidelines
 
