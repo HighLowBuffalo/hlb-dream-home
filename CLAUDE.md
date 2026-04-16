@@ -157,6 +157,36 @@ Wire Claude API so the model powers the conversational flow. The model should re
 - **Magic link flow:** `supabase.auth.signInWithOtp({ email })`. On return, check for existing session and load saved responses.
 - **Superuser check:** On login, query whether user's email exists in superuser list. If yes → admin dashboard. If no → client survey.
 
+## Local Verification Workflow (dev only)
+
+Auth-gated pages cannot be verified without a real session. Use the dev impersonation endpoint to skip the magic-link round-trip for local testing.
+
+**One-time setup:**
+1. `.env.local` must contain `ALLOW_DEV_IMPERSONATE=1` (local only — never set in Vercel).
+2. Run `node scripts/create-test-user.mjs` once to seed `client-test@highlowbuffalo.co` (non-admin).
+
+**Per-change verification loop:**
+1. `next dev -p 3003` (or use `preview_start`).
+2. From `preview_eval`, sign in as the identity whose pages you're testing:
+   ```js
+   fetch('/api/dev/impersonate', {
+     method: 'POST',
+     headers: { 'Content-Type': 'application/json' },
+     body: JSON.stringify({ email: 'tim.buttrill@gmail.com' }) // admin
+     // or: 'client-test@highlowbuffalo.co' for non-admin flows
+   }).then(r => r.json())
+   ```
+3. Response returns `{ user: { id, email, is_admin } }` — sanity-checked that cookies actually persisted. Any non-200 means something's broken; don't proceed until it's green.
+4. Subsequent `preview_eval`/navigation calls in the same browser context carry the session. Hit `/dashboard`, `/survey`, `/submission/<id>`, etc.
+5. Sign out via the SIGN OUT button in the UI, or by clearing storage in DevTools.
+
+**Security gates on `/api/dev/impersonate`:**
+- `NODE_ENV === "development"` — fails closed in Vercel builds
+- `ALLOW_DEV_IMPERSONATE === "1"` — must be explicitly set
+- `host` header must be `localhost` or `127.0.0.1`
+
+Any missing gate returns 404 with no detail. The endpoint requires the target user to already exist in `auth.users` — it will not silently auto-create test users.
+
 ## Code Quality Rules
 
 - **TypeScript strict mode** — no `any` types, no `@ts-ignore`
