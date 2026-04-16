@@ -36,7 +36,9 @@ export default function SurveyPage() {
             router.push("/login");
             return;
           }
-          setInitError("Could not load your data. Please try signing in again.");
+          const errBody = await res.json().catch(() => ({}));
+          console.error("Survey init: submissions fetch failed", res.status, errBody);
+          setInitError(`Could not load your data (${res.status}). Please try signing in again.`);
           return;
         }
 
