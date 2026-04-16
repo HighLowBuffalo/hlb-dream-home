@@ -183,7 +183,13 @@ export default function ChatInterface({
     if (initRef.current) return;
     initRef.current = true;
 
-    const resumeKeys = Object.keys(initialAnswers);
+    // Only include keys that exist in the current catalog. Renamed or
+    // deleted keys (e.g. the old soul "guests" → now "soulGuests", or
+    // "site" which we removed) would otherwise poison the recap and can
+    // cause the LLM to respond with garbage.
+    const resumeKeys = Object.keys(initialAnswers).filter(
+      (k) => getQuestion(k) !== undefined
+    );
     let startMessage: ApiMessage;
 
     if (resumeKeys.length > 0) {
@@ -249,16 +255,35 @@ export default function ChatInterface({
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 gap-4">
+      {/* Header — leaves pr-28 on the right so the fixed SIGN OUT pill
+          doesn't overlap the SaveIndicator or the Start-over link. The
+          label is dropped in favor of the bar+counter alone; context is
+          obvious since the user is on the survey page. */}
+      <div className="flex items-center justify-between pl-6 pr-28 py-4 border-b border-gray-200 gap-4">
         <div className="flex-1 min-w-0">
           <ProgressBar
             current={answeredNonDeferrable}
             total={NON_DEFERRABLE_COUNT}
-            label="Your programming survey"
           />
         </div>
-        <SaveIndicator status={saveStatus} />
+        <div className="flex items-center gap-3 shrink-0">
+          <SaveIndicator status={saveStatus} />
+          <button
+            type="button"
+            onClick={async () => {
+              if (!confirm("Start the survey over? This will delete your current answers.")) return;
+              try {
+                await fetch(`/api/submissions/${submissionId}`, { method: "DELETE" });
+              } catch {
+                // Non-blocking: even if DELETE fails, reload to init a fresh session.
+              }
+              window.location.reload();
+            }}
+            className="text-[10px] font-medium tracking-[0.18em] uppercase text-gray-400 hover:text-black transition-colors whitespace-nowrap"
+          >
+            Start over
+          </button>
+        </div>
       </div>
 
       {/* Messages + FinalReview — scrollable area */}

@@ -17,7 +17,10 @@ export default function SignOutButton() {
     <button
       type="button"
       onClick={handleSignOut}
-      className="fixed top-4 right-6 z-50 text-[10px] font-medium tracking-[0.18em] uppercase text-gray-400 hover:text-black transition-colors"
+      // Pill treatment (bg + border) keeps the label legible when the
+      // underlying header has its own text at the same corner — otherwise
+      // it visually collides with the progress bar / header content.
+      className="fixed top-3 right-4 z-50 bg-white border border-gray-200 px-3 py-1 text-[10px] font-medium tracking-[0.18em] uppercase text-gray-600 hover:text-black hover:border-black transition-colors"
     >
       Sign out
     </button>

@@ -98,3 +98,35 @@ export async function PUT(
 
   return NextResponse.json(data);
 }
+
+// DELETE — user initiates a "start over" on their own submission.
+// RLS scopes to rows where user_id = auth.uid(); cascades clean up
+// program_answers, soul_answers, question_flags, and uploaded_images.
+// Storage objects are orphaned (acceptable — small, and cleaned up
+// when user re-uploads under the same key on the new submission).
+export async function DELETE(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { error } = await supabase
+    .from("submissions")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", user.id);
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ ok: true });
+}
