@@ -38,15 +38,26 @@ export default function SurveyPage() {
         }
 
         const submissions = await res.json();
-        const inProgress = submissions.find(
-          (s: { status: string }) => s.status === "in_progress"
-        );
 
-        if (inProgress) {
-          setSubmissionId(inProgress.id);
-          submissionIdRef.current = inProgress.id;
+        // Find an existing submission: prefer in_progress, fall back to most recent
+        const existing =
+          submissions.find((s: { status: string }) => s.status === "in_progress") ||
+          (submissions.length > 0 ? submissions[0] : null);
+
+        if (existing) {
+          // If submission was already completed, reopen it for editing
+          if (existing.status === "completed") {
+            fetch(`/api/submissions/${existing.id}`, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ status: "in_progress" }),
+            }).catch(() => {});
+          }
+
+          setSubmissionId(existing.id);
+          submissionIdRef.current = existing.id;
           // Load existing answers
-          const detailRes = await fetch(`/api/submissions/${inProgress.id}`);
+          const detailRes = await fetch(`/api/submissions/${existing.id}`);
           if (detailRes.ok) {
             const detail = await detailRes.json();
             const pAnswers: Record<string, string> = {};
@@ -67,7 +78,7 @@ export default function SurveyPage() {
             }
           }
         } else {
-          // Create new submission
+          // No submissions at all — create a new one
           const createRes = await fetch("/api/submissions", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
