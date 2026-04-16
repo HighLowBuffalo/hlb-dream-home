@@ -27,7 +27,13 @@ export default function LoginPage() {
     });
 
     if (authError) {
-      setError("Something went wrong sending the link. Please try again.");
+      // Surface the Supabase detail — generic fallbacks hide rate limits,
+      // allowlist misconfigs, and SMTP issues that are fixable by the admin.
+      setError(
+        authError.message
+          ? `Sign-in failed: ${authError.message}`
+          : "Something went wrong sending the link. Please try again."
+      );
       setLoading(false);
       return;
     }
