@@ -5,6 +5,8 @@ import { SOUL_QUESTIONS } from "@/lib/data/soulQuestions";
 import SoulQuestion from "./SoulQuestion";
 import Button from "@/components/ui/Button";
 import SaveIndicator from "@/components/ui/SaveIndicator";
+import FlaggedReview from "@/components/ui/FlaggedReview";
+import type { FlagType } from "@/components/ui/QuestionFlags";
 
 type SaveStatus = "idle" | "saving" | "saved" | "error";
 
@@ -13,6 +15,9 @@ interface SoulViewProps {
   saveStatus?: SaveStatus;
   onSave?: (key: string, value: string) => void;
   submissionId: string;
+  programAnswers?: Record<string, string>;
+  flags?: Record<string, Set<FlagType>>;
+  onToggleFlag?: (questionKey: string, flag: FlagType) => void;
 }
 
 export default function SoulView({
@@ -20,6 +25,9 @@ export default function SoulView({
   saveStatus = "idle",
   onSave,
   submissionId,
+  programAnswers = {},
+  flags = {},
+  onToggleFlag,
 }: SoulViewProps) {
   const [completing, setCompleting] = useState(false);
   const [completeError, setCompleteError] = useState("");
@@ -72,8 +80,17 @@ export default function SoulView({
             initialValue={answers[q.key] || ""}
             onSave={onSave}
             submissionId={submissionId}
+            activeFlags={flags[q.key]}
+            onToggleFlag={onToggleFlag}
           />
         ))}
+
+        <FlaggedReview
+          flags={flags}
+          programAnswers={programAnswers}
+          soulAnswers={answers}
+          onToggleFlag={onToggleFlag}
+        />
 
         <div className="py-8 border-t border-gray-200">
           {completeError && (

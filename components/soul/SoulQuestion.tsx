@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import Textarea from "@/components/ui/Textarea";
 import SoulUploadBtn from "./SoulUploadBtn";
+import QuestionFlags, { type FlagType } from "@/components/ui/QuestionFlags";
 import type { SoulQuestion as SoulQuestionType } from "@/lib/data/soulQuestions";
 
 interface SoulQuestionProps {
@@ -10,13 +11,19 @@ interface SoulQuestionProps {
   initialValue?: string;
   onSave?: (key: string, value: string) => void;
   submissionId?: string;
+  activeFlags?: Set<FlagType>;
+  onToggleFlag?: (questionKey: string, flag: FlagType) => void;
 }
+
+const EMPTY_FLAGS = new Set<FlagType>();
 
 export default function SoulQuestion({
   question,
   initialValue = "",
   onSave,
   submissionId,
+  activeFlags = EMPTY_FLAGS,
+  onToggleFlag,
 }: SoulQuestionProps) {
   const [value, setValue] = useState(initialValue);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -37,9 +44,15 @@ export default function SoulQuestion({
 
   return (
     <div className="mb-10">
-      <p className="text-[10px] font-medium tracking-[0.18em] uppercase text-gray-400 mb-2">
-        {question.label}
-      </p>
+      <div className="flex items-center justify-between mb-2 gap-4">
+        <p className="text-[10px] font-medium tracking-[0.18em] uppercase text-gray-400">
+          {question.label}
+        </p>
+        <QuestionFlags
+          activeFlags={activeFlags}
+          onToggle={(flag) => onToggleFlag?.(question.key, flag)}
+        />
+      </div>
       <p className="text-xl font-light leading-relaxed mb-4">{question.q}</p>
       <Textarea
         value={value}

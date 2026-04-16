@@ -26,11 +26,12 @@ export async function GET(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const [submission, programAnswers, soulAnswers, images] = await Promise.all([
+  const [submission, programAnswers, soulAnswers, images, flags] = await Promise.all([
     supabase.from("submissions").select("*").eq("id", id).single(),
     supabase.from("program_answers").select("*").eq("submission_id", id),
     supabase.from("soul_answers").select("*").eq("submission_id", id),
     supabase.from("uploaded_images").select("*").eq("submission_id", id),
+    supabase.from("question_flags").select("question_key, flag_type").eq("submission_id", id),
   ]);
 
   if (submission.error) {
@@ -45,5 +46,6 @@ export async function GET(
     programAnswers: programAnswers.data || [],
     soulAnswers: soulAnswers.data || [],
     images: images.data || [],
+    flags: flags.data || [],
   });
 }

@@ -8,6 +8,7 @@ import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import ProgressBar from "@/components/ui/ProgressBar";
 import SaveIndicator from "@/components/ui/SaveIndicator";
+import type { FlagType } from "@/components/ui/QuestionFlags";
 
 type SaveStatus = "idle" | "saving" | "saved" | "error";
 
@@ -15,6 +16,7 @@ interface ChatMessage {
   id: string;
   sender: "hlb" | "user";
   text: string;
+  extractedKeys?: string[];
 }
 
 interface ApiMessage {
@@ -28,6 +30,8 @@ interface ChatInterfaceProps {
   onComplete?: () => void;
   saveStatus?: SaveStatus;
   submissionId?: string | null;
+  flags?: Record<string, Set<FlagType>>;
+  onToggleFlag?: (questionKey: string, flag: FlagType) => void;
 }
 
 /**
@@ -62,6 +66,8 @@ export default function ChatInterface({
   onAnswer,
   onComplete,
   saveStatus = "idle",
+  flags,
+  onToggleFlag,
 }: ChatInterfaceProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [apiMessages, setApiMessages] = useState<ApiMessage[]>([]);
@@ -106,6 +112,25 @@ export default function ChatInterface({
         for (const { key, value } of answers) {
           onAnswer?.(key, value);
           setAnsweredKeys((prev) => new Set([...prev, key]));
+        }
+
+        // Attach extracted question keys to the most recent user message so
+        // the user can flag that Q/A with "come back to this" / "flexible".
+        if (answers.length > 0) {
+          const newKeys = answers.map((a) => a.key);
+          setMessages((prev) => {
+            const copy = [...prev];
+            for (let i = copy.length - 1; i >= 0; i--) {
+              if (copy[i].sender === "user") {
+                const merged = Array.from(
+                  new Set([...(copy[i].extractedKeys || []), ...newKeys])
+                );
+                copy[i] = { ...copy[i], extractedKeys: merged };
+                break;
+              }
+            }
+            return copy;
+          });
         }
 
         // Add assistant message
@@ -234,7 +259,14 @@ export default function ChatInterface({
       <div ref={scrollRef} className="flex-1 overflow-y-auto min-h-0">
         <div className="max-w-2xl mx-auto px-6 py-6">
           {messages.map((msg) => (
-            <Message key={msg.id} sender={msg.sender} text={msg.text} />
+            <Message
+              key={msg.id}
+              sender={msg.sender}
+              text={msg.text}
+              extractedKeys={msg.extractedKeys}
+              flags={flags}
+              onToggleFlag={onToggleFlag}
+            />
           ))}
           {isTyping && <TypingIndicator />}
         </div>

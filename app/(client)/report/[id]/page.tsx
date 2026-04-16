@@ -6,11 +6,17 @@ import { PROGRAM_QUESTIONS } from "@/lib/data/questions";
 import { SOUL_QUESTIONS } from "@/lib/data/soulQuestions";
 import { SPACE_DEFAULTS } from "@/lib/data/spaceDefaults";
 import Button from "@/components/ui/Button";
+import QuestionFlags, { type FlagType } from "@/components/ui/QuestionFlags";
 
 interface Answer {
   question_key: string;
   answer_text: string | null;
   answer_data?: Record<string, unknown> | null;
+}
+
+interface Flag {
+  question_key: string;
+  flag_type: FlagType;
 }
 
 interface Submission {
@@ -24,6 +30,7 @@ interface Submission {
   completed_at: string | null;
   programAnswers: Answer[];
   soulAnswers: Answer[];
+  flags?: Flag[];
 }
 
 // Map program answer keys to space defaults for the space program table
@@ -234,6 +241,12 @@ export default function ReportPage() {
     if (a.answer_text) soulMap[a.question_key] = a.answer_text;
   }
 
+  const flagMap: Record<string, Set<FlagType>> = {};
+  for (const f of submission.flags || []) {
+    if (!flagMap[f.question_key]) flagMap[f.question_key] = new Set();
+    flagMap[f.question_key].add(f.flag_type);
+  }
+
   const questionTextMap: Record<string, string> = {};
   for (const q of PROGRAM_QUESTIONS) {
     questionTextMap[q.key] = q.text;
@@ -343,7 +356,12 @@ export default function ReportPage() {
                 <div className="space-y-3">
                   {sectionAnswers.map(({ key, question, answer }) => (
                     <div key={key}>
-                      <p className="text-xs text-gray-400 mb-0.5">{question}</p>
+                      <div className="flex items-start justify-between gap-3">
+                        <p className="text-xs text-gray-400 mb-0.5 flex-1">{question}</p>
+                        {flagMap[key] && flagMap[key].size > 0 && (
+                          <QuestionFlags activeFlags={flagMap[key]} readOnly />
+                        )}
+                      </div>
                       <p className="text-sm font-light leading-relaxed">{answer}</p>
                     </div>
                   ))}
@@ -362,7 +380,12 @@ export default function ReportPage() {
             <div className="space-y-6">
               {SOUL_QUESTIONS.filter((q) => soulMap[q.key]).map((q) => (
                 <div key={q.key}>
-                  <p className="text-xs text-gray-400 mb-1">{q.label}</p>
+                  <div className="flex items-start justify-between gap-3">
+                    <p className="text-xs text-gray-400 mb-1 flex-1">{q.label}</p>
+                    {flagMap[q.key] && flagMap[q.key].size > 0 && (
+                      <QuestionFlags activeFlags={flagMap[q.key]} readOnly />
+                    )}
+                  </div>
                   <p className="text-sm font-light leading-relaxed whitespace-pre-wrap">
                     {soulMap[q.key]}
                   </p>

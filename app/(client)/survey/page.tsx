@@ -5,10 +5,13 @@ import { useRouter } from "next/navigation";
 import ChatInterface from "@/components/chat/ChatInterface";
 import SoulView from "@/components/soul/SoulView";
 import Button from "@/components/ui/Button";
+import type { FlagType } from "@/components/ui/QuestionFlags";
 import { createClient } from "@/lib/supabase/client";
 
 type SaveStatus = "idle" | "saving" | "saved" | "error";
 type Phase = "program" | "soul";
+
+export type FlagsByKey = Record<string, Set<FlagType>>;
 
 export default function SurveyPage() {
   const router = useRouter();
@@ -17,6 +20,7 @@ export default function SurveyPage() {
   const submissionIdRef = useRef<string | null>(null);
   const [programAnswers, setProgramAnswers] = useState<Record<string, string>>({});
   const [soulAnswers, setSoulAnswers] = useState<Record<string, string>>({});
+  const [flags, setFlags] = useState<FlagsByKey>({});
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [loading, setLoading] = useState(true);
   const [initError, setInitError] = useState<string | null>(null);
@@ -68,6 +72,16 @@ export default function SurveyPage() {
               sAnswers[a.question_key] = a.answer_text || "";
             }
             setSoulAnswers(sAnswers);
+
+            // Hydrate flags
+            const loadedFlags: FlagsByKey = {};
+            for (const f of detail.flags || []) {
+              if (!loadedFlags[f.question_key]) {
+                loadedFlags[f.question_key] = new Set<FlagType>();
+              }
+              loadedFlags[f.question_key].add(f.flag_type as FlagType);
+            }
+            setFlags(loadedFlags);
 
             if (Object.keys(sAnswers).length > 0 || Object.keys(pAnswers).length >= 30) {
               setPhase("soul");
@@ -184,6 +198,45 @@ export default function SurveyPage() {
     setPhase("soul");
   }, []);
 
+  const handleToggleFlag = useCallback(
+    async (questionKey: string, flagType: FlagType) => {
+      const sid = submissionIdRef.current;
+      if (!sid) return;
+
+      // Optimistic update
+      setFlags((prev) => {
+        const next = { ...prev };
+        const existing = new Set(next[questionKey] || []);
+        if (existing.has(flagType)) existing.delete(flagType);
+        else existing.add(flagType);
+        if (existing.size === 0) delete next[questionKey];
+        else next[questionKey] = existing;
+        return next;
+      });
+
+      try {
+        const res = await fetch("/api/flags", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ submissionId: sid, questionKey, flagType }),
+        });
+        if (!res.ok) throw new Error("flag toggle failed");
+      } catch {
+        // Revert on failure
+        setFlags((prev) => {
+          const next = { ...prev };
+          const existing = new Set(next[questionKey] || []);
+          if (existing.has(flagType)) existing.delete(flagType);
+          else existing.add(flagType);
+          if (existing.size === 0) delete next[questionKey];
+          else next[questionKey] = existing;
+          return next;
+        });
+      }
+    },
+    []
+  );
+
   if (loading) {
     return (
       <div className="flex flex-1 items-center justify-center">
@@ -229,6 +282,8 @@ export default function SurveyPage() {
           onComplete={handleProgramComplete}
           saveStatus={saveStatus}
           submissionId={submissionId}
+          flags={flags}
+          onToggleFlag={handleToggleFlag}
         />
       ) : (
         <SoulView
@@ -236,6 +291,9 @@ export default function SurveyPage() {
           saveStatus={saveStatus}
           onSave={handleSoulSave}
           submissionId={submissionId}
+          programAnswers={programAnswers}
+          flags={flags}
+          onToggleFlag={handleToggleFlag}
         />
       )}
     </div>
