@@ -41,9 +41,9 @@ export default function SaveReassurance() {
             </h2>
             <p className="text-sm font-light text-gray-600 leading-relaxed mb-4">
               Close this tab anytime. When you want to come back, go to{" "}
-              <span className="text-black">program.highlowbuffalo.co</span> and
-              request a new sign-in link at the email address you used — we&apos;ll
-              drop you right back where you left off.
+              <span className="text-black">program.highlowbuffalo.co</span>
+              {" "}and request a new sign-in link at the email address you
+              used — we&apos;ll drop you right back where you left off.
             </p>
             <p className="text-sm font-light text-gray-600 leading-relaxed mb-6">
               Nothing is lost if your laptop dies, your browser crashes, or you
