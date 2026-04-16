@@ -1,4 +1,4 @@
-import SignOutButton from "@/components/ui/SignOutButton";
+import TopRightPills from "@/components/ui/TopRightPills";
 
 export default function AdminLayout({
   children,
@@ -8,7 +8,7 @@ export default function AdminLayout({
   // TODO: Admin guard — redirect if not is_admin
   return (
     <div className="flex flex-col min-h-screen">
-      <SignOutButton />
+      <TopRightPills />
       {children}
     </div>
   );

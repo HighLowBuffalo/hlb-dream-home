@@ -730,6 +730,16 @@ export const QUESTIONS: Question[] = [
     deferrable: false,
     uploadable: false,
   },
+  {
+    key: "moodBoardLink",
+    label: "Mood board or Pinterest link",
+    text: "Do you have a Pinterest board, Houzz ideabook, or other mood board you want to share? Paste a link and we'll review it alongside everything you've told me. It's fine if you don't — no pressure.",
+    phase: "soul",
+    table: "soul",
+    deferrable: false,
+    uploadable: false,
+    placeholder: "https://pinterest.com/... (or leave blank)",
+  },
 ];
 
 // Convenience accessors (preserve naming used elsewhere in the codebase).

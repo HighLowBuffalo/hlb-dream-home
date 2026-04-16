@@ -320,7 +320,7 @@ export default function ChatInterface({
           doesn't overlap the SaveIndicator or the Start-over link. The
           label is dropped in favor of the bar+counter alone; context is
           obvious since the user is on the survey page. */}
-      <div className="flex items-center justify-between pl-6 pr-28 py-4 border-b border-gray-200 gap-4">
+      <div className="flex items-center justify-between pl-6 pr-56 py-4 border-b border-gray-200 gap-4">
         <div className="flex-1 min-w-0">
           <ProgressBar
             current={answeredNonDeferrable}

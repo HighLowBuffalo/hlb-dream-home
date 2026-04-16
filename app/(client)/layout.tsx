@@ -1,4 +1,4 @@
-import SignOutButton from "@/components/ui/SignOutButton";
+import TopRightPills from "@/components/ui/TopRightPills";
 
 export default function ClientLayout({
   children,
@@ -8,7 +8,7 @@ export default function ClientLayout({
   // TODO: Auth guard — redirect to /login if no session
   return (
     <div className="flex flex-col h-screen overflow-hidden">
-      <SignOutButton />
+      <TopRightPills />
       {children}
     </div>
   );
