@@ -19,7 +19,8 @@
       "WebFetch(domain:hlb-dream-home-tim-buttrills-projects.vercel.app)",
       "Bash(curl -s -o /dev/null -w \"%{redirect_url}\\\\n%{http_code}\" https://hlb-dream-home.vercel.app)",
       "Bash(curl -s -I https://hlb-dream-home.vercel.app)",
-      "Bash(curl -s -I https://hlb-dream-home-umber.vercel.app)"
+      "Bash(curl -s -I https://hlb-dream-home-umber.vercel.app)",
+      "Bash(curl -s http://localhost:3003/api/admin/submissions -H \"Authorization: Bearer $\\(grep SUPABASE_SERVICE_ROLE_KEY .env.local)"
     ]
   }
 }

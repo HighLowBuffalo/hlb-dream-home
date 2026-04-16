@@ -5,7 +5,10 @@
       "name": "dev",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
-      "port": 3003
+      "port": 3003,
+      "env": {
+        "NODE_ENV": "development"
+      }
     }
   ]
 }

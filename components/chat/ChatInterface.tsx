@@ -268,11 +268,15 @@ export default function ChatInterface({
         {!isTyping && question?.quickReplies && (
           <div className="mb-4">
             <QuickReplies
-              options={[...question.quickReplies, "Other"]}
+              options={
+                question.quickReplies.some(r => r.toLowerCase() === "other")
+                  ? question.quickReplies
+                  : [...question.quickReplies, "Other"]
+              }
               selected={selectedChips}
               multi={question.type === "chips_multi"}
               onSelect={(v) =>
-                handleChipSelect(v === "Other" ? "__other__" : v)
+                handleChipSelect(v.toLowerCase() === "other" ? "__other__" : v)
               }
             />
             {showOtherInput && (
