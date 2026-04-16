@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { ensureProfile } from "@/lib/supabase/ensureProfile";
 
 // GET — list submissions for current user
 export async function GET() {
@@ -34,6 +35,15 @@ export async function POST(request: Request) {
 
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // Safety net: ensure profile exists before creating submission
+  const profile = await ensureProfile(supabase, user);
+  if (!profile.ok) {
+    return NextResponse.json(
+      { error: "Could not create user profile" },
+      { status: 500 }
+    );
   }
 
   const body = await request.json();

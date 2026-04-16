@@ -11,7 +11,7 @@ import Button from "@/components/ui/Button";
 import ProgressDots from "@/components/ui/ProgressDots";
 import SaveIndicator from "@/components/ui/SaveIndicator";
 
-type SaveStatus = "idle" | "saving" | "saved";
+type SaveStatus = "idle" | "saving" | "saved" | "error";
 
 interface ChatMessage {
   id: string;
@@ -23,12 +23,14 @@ interface ChatInterfaceProps {
   answers?: Record<string, string>;
   onAnswer?: (key: string, value: string) => void;
   onComplete?: () => void;
+  saveStatus?: SaveStatus;
 }
 
 export default function ChatInterface({
   answers: initialAnswers = {},
   onAnswer,
   onComplete,
+  saveStatus = "idle",
 }: ChatInterfaceProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -36,7 +38,6 @@ export default function ChatInterface({
   const [selectedChips, setSelectedChips] = useState<string[]>([]);
   const [stepperValue, setStepperValue] = useState(3);
   const [isTyping, setIsTyping] = useState(false);
-  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [answers, setAnswers] = useState<Record<string, string>>(initialAnswers);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -112,13 +113,7 @@ export default function ChatInterface({
   const saveAnswer = useCallback(
     (key: string, value: string) => {
       setAnswers((prev) => ({ ...prev, [key]: value }));
-      setSaveStatus("saving");
       onAnswer?.(key, value);
-      // TODO: Wire up actual autosave to Supabase
-      setTimeout(() => {
-        setSaveStatus("saved");
-        setTimeout(() => setSaveStatus("idle"), 3000);
-      }, 500);
     },
     [onAnswer]
   );

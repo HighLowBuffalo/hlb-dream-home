@@ -34,7 +34,7 @@ function VerifyContent() {
 
       if (user) {
         // Ensure profile exists
-        await supabase.from("profiles").upsert(
+        const { error: profileError } = await supabase.from("profiles").upsert(
           {
             id: user.id,
             email: user.email!,
@@ -42,6 +42,11 @@ function VerifyContent() {
           },
           { onConflict: "id" }
         );
+
+        if (profileError) {
+          setError("Could not set up your profile. Please try again.");
+          return;
+        }
 
         router.replace("/welcome");
       } else {

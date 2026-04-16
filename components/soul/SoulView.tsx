@@ -6,13 +6,13 @@ import SoulQuestion from "./SoulQuestion";
 import Button from "@/components/ui/Button";
 import SaveIndicator from "@/components/ui/SaveIndicator";
 
-type SaveStatus = "idle" | "saving" | "saved";
+type SaveStatus = "idle" | "saving" | "saved" | "error";
 
 interface SoulViewProps {
   answers?: Record<string, string>;
   saveStatus?: SaveStatus;
   onSave?: (key: string, value: string) => void;
-  submissionId?: string | null;
+  submissionId: string;
 }
 
 export default function SoulView({
@@ -22,26 +22,23 @@ export default function SoulView({
   submissionId,
 }: SoulViewProps) {
   const [completing, setCompleting] = useState(false);
+  const [completeError, setCompleteError] = useState("");
 
-  function handleComplete() {
+  async function handleComplete() {
     setCompleting(true);
+    setCompleteError("");
 
-    // Try to mark as completed, but don't let it block navigation
-    if (submissionId) {
-      fetch(`/api/submissions/${submissionId}`, {
+    try {
+      await fetch(`/api/submissions/${submissionId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: "completed" }),
-      }).catch(() => {});
+      });
+    } catch {
+      // Non-blocking: answers are saved, report can still render
     }
 
-    // Navigate no matter what — use setTimeout to ensure state update renders first
-    setTimeout(() => {
-      const target = submissionId
-        ? `/report/${submissionId}`
-        : "/welcome";
-      window.location.href = target;
-    }, 100);
+    window.location.href = `/report/${submissionId}`;
   }
 
   return (
@@ -78,6 +75,9 @@ export default function SoulView({
         ))}
 
         <div className="py-8 border-t border-gray-200">
+          {completeError && (
+            <p className="text-sm font-light text-red-600 mb-4">{completeError}</p>
+          )}
           <Button
             onClick={handleComplete}
             disabled={completing}

@@ -30,7 +30,7 @@ export default function SoulQuestion({
       if (text.trim()) {
         onSave?.(question.key, text);
       }
-    }, 1500);
+    }, 500);
   }
 
   return (
