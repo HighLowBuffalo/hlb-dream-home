@@ -55,13 +55,13 @@ export default function SoulView({
       <div className="flex-1 overflow-y-auto px-6 py-8 max-w-2xl mx-auto w-full">
         <div className="mb-10">
           <h2 className="text-2xl font-light mb-3">
-            Now for the part that matters most.
+            Now for the part that really shapes your home.
           </h2>
           <p className="text-sm font-light text-gray-600 leading-relaxed">
-            These questions aren&apos;t about square footage or room counts. They&apos;re
-            about how you want to feel in your home. There are no right answers
-            — just honest ones. Answer as many as you&apos;d like, in whatever order
-            feels right.
+            These questions help us understand how you live — not just what
+            rooms you need, but how you want to feel in them. The best homes
+            respond to both the people who live there and the place they&apos;re
+            built. No right answers — just honest ones.
           </p>
         </div>
 

@@ -44,6 +44,45 @@ export const PROGRAM_QUESTIONS: Question[] = [
     quickReplies: ["New construction", "Addition", "Renovation", "Other"],
   },
 
+  // --- Household & Context ---
+  {
+    key: "household",
+    text: "Who will be living in this home? Tell us about your household — adults, kids (ages), pets.",
+    type: "text",
+    placeholder: "e.g. Two adults, two kids (8 and 12), one dog",
+  },
+  {
+    key: "currentHome",
+    text: "What do you love about where you live now? And what are you most eager to leave behind?",
+    type: "text",
+    placeholder: "What works, what doesn't...",
+  },
+  {
+    key: "site",
+    text: "Tell us about your lot or building site. What do you know about it — views, slope, orientation, trees, neighbors?",
+    type: "text",
+    placeholder: "Flat lot, south-facing, mountain views, mature trees...",
+  },
+  {
+    key: "budgetRange",
+    text: "Do you have a construction budget range in mind? Even a rough range helps the design team.",
+    type: "chips_single",
+    quickReplies: [
+      "Under $1M",
+      "$1M - $2M",
+      "$2M - $3M",
+      "$3M - $5M",
+      "$5M+",
+      "Not sure yet",
+    ],
+  },
+  {
+    key: "timeline",
+    text: "When are you hoping to move in? Any hard deadlines?",
+    type: "text",
+    placeholder: "e.g. Within 2 years, before kids start school...",
+  },
+
   // --- Bedrooms / Bathrooms ---
   {
     key: "beds",
@@ -310,6 +349,21 @@ export const PROGRAM_QUESTIONS: Question[] = [
       "It's central to how we live",
       "We host sometimes",
       "Rarely — home is mostly private",
+    ],
+  },
+
+  // --- Sustainability ---
+  {
+    key: "sustainability",
+    text: "How important is sustainability to you? Select any that apply.",
+    type: "chips_multi",
+    quickReplies: [
+      "Energy efficiency",
+      "Solar panels",
+      "Water conservation",
+      "Smart home tech",
+      "Durable / low-maintenance materials",
+      "Not a priority",
     ],
   },
 

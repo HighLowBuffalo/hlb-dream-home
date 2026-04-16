@@ -37,14 +37,14 @@ export default function WelcomePage() {
         </p>
 
         <h1 className="text-3xl font-light leading-tight mb-4">
-          Welcome to your Home Vision Tool
+          Let's plan your dream home
         </h1>
 
         <p className="text-sm font-light text-gray-600 leading-relaxed mb-8 max-w-md mx-auto">
-          We're going to walk through two parts together. First, we'll cover the
-          practical side — rooms, sizes, how you use your home. Then, we'll get
-          into the soul of it — how you want your home to feel. This will take
-          about 30 minutes. You can save your progress and come back anytime.
+          This is the first step in your design journey — what architects call
+          programming. We'll talk through the practical side (rooms, spaces, how
+          you use your home) and the personal side (how you want it to feel).
+          Take about 30 minutes, or stop anytime and come back later.
         </p>
 
         {loading ? (

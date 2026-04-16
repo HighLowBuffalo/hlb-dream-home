@@ -44,12 +44,13 @@ export default function LoginPage() {
             High, Low, Buffalo
           </p>
           <h1 className="text-3xl font-light leading-tight mb-3">
-            Home Vision Tool
+            Dream Home Planning
           </h1>
           <p className="text-sm font-light text-gray-600 leading-relaxed">
-            This tool will walk you through a series of questions about your
-            dream home. It takes about 30 minutes, and you can save your
-            progress and come back anytime.
+            Building a custom home starts with a conversation. This tool walks
+            you through the questions our design team needs to understand your
+            vision — how you live, what you need, and how you want your home
+            to feel.
           </p>
         </div>
 

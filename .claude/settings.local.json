@@ -23,7 +23,9 @@
       "Bash(curl -s http://localhost:3003/api/admin/submissions -H \"Authorization: Bearer $\\(grep SUPABASE_SERVICE_ROLE_KEY .env.local)",
       "Bash(npm install:*)",
       "Bash(curl -s -X POST http://localhost:3003/api/chat -H \"Content-Type: application/json\" -d '{\"messages\":[{\"role\":\"user\",\"content\":\"Hi, I am ready to start the home programming questionnaire.\"}]}')",
-      "Bash(node -e ':*)"
+      "Bash(node -e ':*)",
+      "Bash(pip install:*)",
+      "Bash(python -c ':*)"
     ]
   }
 }
